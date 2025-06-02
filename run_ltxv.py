@@ -73,7 +73,7 @@ MODEL_PATHS = {
     "tokenizer": "ckpts/T5_xxl_1.1",
     "scheduler": "ckpts/ltxv_scheduler.json",
     "upsampler": "ckpts/ltxv_0.9.7_spatial_upscaler.safetensors",
-    "config": "ltx_video/configs/ltxv-13b-0.9.7-distilled.yaml",
+    "config": "ltx_video/configs/ltxv-13b-0.9.7-dev.yaml",
 }
 
 # Model Configuration
@@ -339,9 +339,8 @@ class MinimalLTXV:
         pipeline = LTXVideoPipeline(**submodel_dict)
         pipeline = LTXMultiScalePipeline(pipeline, latent_upsampler=latent_upsampler)
         
-        # Ensure pipeline is on the correct device
-        pipeline = pipeline.to(self.device)
-        self.logger.info(f"  Pipeline moved to device: {self.device}")
+        # Note: LTXMultiScalePipeline doesn't have .to() method - components already on device
+        self.logger.info(f"  Pipeline created with components on device: {self.device}")
 
         self.logger.info("✓ Pipeline loaded successfully")
         return pipeline
