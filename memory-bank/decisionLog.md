@@ -77,3 +77,26 @@ User requested setup of ruff to handle line length formatting that conforms to f
 - Verified both linting (`ruff check --select E501`) and formatting (`ruff format`) functionality
 
 ---
+[2025-01-02 23:00:00] - Auto Model Download Implementation for run_ltxv.py
+
+## Decision
+
+Implement automatic model downloading functionality in [`run_ltxv.py`](run_ltxv.py:1) to match the behavior of [`wgp.py`](wgp.py:1)
+
+## Rationale
+
+User reported that [`run_ltxv.py`](run_ltxv.py:1) wasn't auto-downloading models like [`wgp.py`](wgp.py:1) does. This creates inconsistent user experience and requires manual model management. By implementing automatic downloads, the script becomes truly standalone and user-friendly.
+
+## Implementation Details
+
+- Added [`download_ltxv_models()`](run_ltxv.py:115) function that mirrors [`wgp.py`](wgp.py:1893)'s download logic
+- Used same HuggingFace repository: "DeepBeepMeep/LTX_Video"
+- Modified [`check_model_files()`](run_ltxv.py:172) to attempt download before failing
+- Added proper error handling for missing huggingface_hub dependency
+- Implemented download for all required LTXV files:
+  - T5 tokenizer files in T5_xxl_1.1 subfolder
+  - Main model files (VAE, upsampler, scheduler, transformer, text encoder)
+- Maintains existing error reporting if downloads fail
+- Creates ckpts directory automatically if needed
+
+---

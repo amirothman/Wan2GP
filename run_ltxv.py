@@ -67,7 +67,7 @@ SAMPLING_STEPS = 10  # Distilled model uses fewer steps
 
 # Model Paths (based on WanGP structure)
 MODEL_PATHS = {
-    "transformer": "ckpts/ltxv_0.9.7_13B_distilled_bf16.safetensors",
+    "transformer": "ckpts/ltxv_0.9.7_13B_dev_bf16.safetensors",
     "vae": "ckpts/ltxv_0.9.7_VAE.safetensors",
     "text_encoder": "ckpts/T5_xxl_1.1_enc_bf16.safetensors",
     "tokenizer": "ckpts/T5_xxl_1.1",
@@ -153,7 +153,7 @@ def download_ltxv_models(logger):
             "ltxv_0.9.7_VAE.safetensors",
             "ltxv_0.9.7_spatial_upscaler.safetensors",
             "ltxv_scheduler.json",
-            "ltxv_0.9.7_13B_distilled_bf16.safetensors",
+            "ltxv_0.9.7_13B_dev_bf16.safetensors",
             "T5_xxl_1.1_enc_bf16.safetensors"
         ]
         
