@@ -240,6 +240,9 @@ class MinimalLTXV:
         self.logger = logger
         self.device = get_device()
         self.logger.info(f"Using device: {self.device}")
+        
+        # Add _interrupt attribute for pipeline compatibility
+        self._interrupt = False
 
         # Load pipeline configuration
         self.config = self._load_config()
@@ -390,6 +393,7 @@ class MinimalLTXV:
             try:
                 images = self.pipeline(
                     **self.config,
+                    ltxv_model=self,
                     num_inference_steps1=SAMPLING_STEPS,
                     num_inference_steps2=SAMPLING_STEPS,
                     skip_layer_strategy=skip_layer_strategy,
