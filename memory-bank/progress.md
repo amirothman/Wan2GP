@@ -123,3 +123,47 @@ This file tracks the project's progress using a task list format.
 - 🧪 User testing of run_ltxv.py with corrected ltxv_model parameter
 - 🔍 Monitor for any remaining pipeline issues
 - 📚 Update documentation if needed based on test results
+[2025-01-06 23:41:00] - Device Mismatch Error Debug and Fix
+
+## Completed Tasks
+
+- ✅ Diagnosed "Expected all tensors to be on the same device" RuntimeError in run_ltxv.py
+- ✅ Identified root cause: Model components not explicitly moved to GPU device
+- ✅ Analyzed 5-7 potential sources and narrowed to device placement issues
+- ✅ Added explicit device placement for text encoder, VAE, and transformer components
+- ✅ Implemented comprehensive diagnostic logging for device verification
+- ✅ Ensured pipeline itself is moved to target device
+- ✅ Committed and pushed fix to server (commit 437c176)
+- ✅ Updated Memory Bank with detailed debugging analysis
+
+## Current Tasks
+
+- 🔄 Ready for server-side testing of device placement fix
+- 📋 Awaiting validation that the device mismatch error is resolved
+
+## Next Steps
+
+- 🧪 Server testing of run_ltxv.py with corrected device placement
+- 🔍 Monitor for any remaining device-related issues
+- 📚 Update documentation if needed based on test results
+[2025-01-06 23:44:00] - CUDA OOM Fix: Switched to Quantized Model
+
+## Completed Tasks
+
+- ✅ Updated [`run_ltxv.py`](run_ltxv.py:1) to use quantized model for CUDA OOM resolution
+- ✅ Changed transformer model from `ltxv_0.9.7_13B_dev_bf16.safetensors` to `ltxv_0.9.7_13B_dev_quanto_bf16_int8.safetensors`
+- ✅ Switched configuration from dev to distilled (`ltxv-13b-0.9.7-distilled.yaml`)
+- ✅ Reduced sampling steps from 30 to 10 for faster generation
+- ✅ Updated download function to fetch quantized model file
+- ✅ Updated config loading comments to reflect quantized model usage
+
+## Current Tasks
+
+- 🔄 Ready for testing with quantized model to resolve CUDA OOM
+- 📋 Awaiting validation that memory usage is reduced
+
+## Next Steps
+
+- 🧪 Test run_ltxv.py with quantized model on RTX 3090
+- 🔍 Monitor VRAM usage and generation quality
+- 📚 Update documentation if needed based on test results

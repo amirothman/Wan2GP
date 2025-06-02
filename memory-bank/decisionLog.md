@@ -205,3 +205,58 @@ The LTX Video pipeline expects an `ltxv_model` parameter in kwargs (line 1812 in
 4. **Minimal Fix**: Created compatible object with required _interrupt attribute
 
 ---
+[2025-01-06 23:41:00] - Device Mismatch Error Fix in run_ltxv.py
+
+## Decision
+
+Fixed "Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!" RuntimeError
+
+## Rationale
+
+The error occurred during T5 text encoder processing in the encode_prompt phase, specifically at `position_bias = position_bias + causal_mask` where tensors were on different devices. Analysis revealed that model components (text encoder, VAE, transformer) were not explicitly moved to the target GPU device, causing device mismatch during tensor operations.
+
+## Implementation Details
+
+- **Root Cause**: Text encoder, VAE, and transformer components loaded but not explicitly moved to GPU
+- **Detection Method**: Added diagnostic logging to track device placement for each component
+- **Solution**: 
+  1. Added explicit `.to(self.device)` calls for text encoder, VAE, and transformer
+  2. Added device verification logging before and after device moves
+  3. Ensured pipeline itself is moved to target device
+  4. Added dtype specification alongside device placement
+- **Diagnostic Logging**: Added device tracking for all major components to validate fix
+
+## Diagnosis Process
+
+1. **Error Analysis**: RuntimeError in T5 text encoder during position_bias + causal_mask operation
+2. **Source Identification**: 5-7 potential sources narrowed to device placement issues
+3. **Most Likely Causes**: Text encoder device placement and pipeline component synchronization
+4. **Validation**: Added comprehensive device logging to confirm all components on same device
+
+---
+[2025-01-06 23:44:00] - CUDA OOM Fix: Quantized Model Implementation
+
+## Decision
+
+Switched from regular 13B dev model to quantized 13B model to resolve CUDA out of memory error
+
+## Rationale
+
+User experienced "CUDA out of memory. Tried to allocate 128.00 MiB. GPU 0 has a total capacity of 23.59 GiB of which 95.06 MiB is free" error on RTX 3090. The quantized model (`ltxv_0.9.7_13B_dev_quanto_bf16_int8.safetensors`) uses int8 quantization to significantly reduce memory footprint while maintaining acceptable quality.
+
+## Implementation Details
+
+- **Model Change**: `ltxv_0.9.7_13B_dev_bf16.safetensors` → `ltxv_0.9.7_13B_dev_quanto_bf16_int8.safetensors`
+- **Config Change**: `ltxv-13b-0.9.7-dev.yaml` → `ltxv-13b-0.9.7-distilled.yaml`
+- **Sampling Steps**: Reduced from 30 to 10 steps (distilled model optimization)
+- **Download Update**: Modified download function to fetch quantized model
+- **Memory Benefits**: Int8 quantization should reduce VRAM usage by ~50%
+
+## Expected Outcomes
+
+1. **Memory Reduction**: Quantized model should use significantly less VRAM
+2. **Faster Generation**: Distilled config with 10 steps vs 30 steps
+3. **Quality Trade-off**: Slight quality reduction acceptable for memory savings
+4. **Compatibility**: Should work with existing pipeline without code changes
+
+---
