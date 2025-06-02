@@ -279,21 +279,34 @@ class MinimalLTXV:
         vae = offload.fast_load_transformers_model(
             MODEL_PATHS["vae"], modelClass=CausalVideoAutoencoder
         )
-        vae = vae.to(VAE_DTYPE)
+        vae = vae.to(self.device).to(VAE_DTYPE)
         vae._model_dtype = VAE_DTYPE
+        self.logger.info(f"  VAE device: {next(vae.parameters()).device}")
 
         # Load Transformer
         self.logger.info("  Loading Transformer...")
         transformer = offload.fast_load_transformers_model(
             MODEL_PATHS["transformer"], modelClass=Transformer3DModel
         )
+        transformer = transformer.to(self.device).to(DTYPE)
         transformer._model_dtype = DTYPE
         if MIXED_PRECISION:
             transformer._lock_dtype = torch.float
+        self.logger.info(f"  Transformer device: {next(transformer.parameters()).device}")
 
         # Load Text Encoder
         self.logger.info("  Loading Text Encoder...")
         text_encoder = offload.fast_load_transformers_model(MODEL_PATHS["text_encoder"])
+        
+        # DIAGNOSTIC: Log text encoder device before moving
+        self.logger.info(f"  Text encoder device before move: {next(text_encoder.parameters()).device}")
+        
+        # Explicitly move text encoder to target device
+        text_encoder = text_encoder.to(self.device)
+        text_encoder._model_dtype = DTYPE
+        
+        # DIAGNOSTIC: Log text encoder device after moving
+        self.logger.info(f"  Text encoder device after move: {next(text_encoder.parameters()).device}")
 
         # Load other components
         self.logger.info("  Loading additional components...")
@@ -325,6 +338,10 @@ class MinimalLTXV:
 
         pipeline = LTXVideoPipeline(**submodel_dict)
         pipeline = LTXMultiScalePipeline(pipeline, latent_upsampler=latent_upsampler)
+        
+        # Ensure pipeline is on the correct device
+        pipeline = pipeline.to(self.device)
+        self.logger.info(f"  Pipeline moved to device: {self.device}")
 
         self.logger.info("✓ Pipeline loaded successfully")
         return pipeline
