@@ -1,31 +1,27 @@
 # Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
-import gc
 import logging
-import math
 import os
 import random
 import sys
-import types
-from contextlib import contextmanager
-from functools import partial
-import json
-import numpy as np
+
 import torch
-import torch.cuda.amp as amp
-import torch.distributed as dist
 import torchvision.transforms.functional as TF
 from tqdm import tqdm
 
-from .distributed.fsdp import shard_model
+from wan.modules.posemb_layers import get_rotary_pos_embed
+from wan.utils.utils import calculate_new_dimensions, resize_lanczos
+
 from .modules.clip import CLIPModel
 from .modules.model import WanModel
 from .modules.t5 import T5EncoderModel
 from .modules.vae import WanVAE
-from .utils.fm_solvers import (FlowDPMSolverMultistepScheduler,
-                               get_sampling_sigmas, retrieve_timesteps)
+from .utils.fm_solvers import (
+    FlowDPMSolverMultistepScheduler,
+    get_sampling_sigmas,
+    retrieve_timesteps,
+)
 from .utils.fm_solvers_unipc import FlowUniPCMultistepScheduler
-from wan.modules.posemb_layers import get_rotary_pos_embed
-from wan.utils.utils import resize_lanczos, calculate_new_dimensions
+
 
 def optimized_scale(positive_flat, negative_flat):
 
@@ -37,7 +33,7 @@ def optimized_scale(positive_flat, negative_flat):
 
     # st_star = v_cond^T * v_uncond / ||v_uncond||^2
     st_star = dot_product / squared_norm
-    
+
     return st_star
 
 
@@ -55,7 +51,7 @@ class WanI2V:
         VAE_dtype = torch.float32,
         mixed_precision_transformer = False
     ):
-        self.device = torch.device(f"cuda")
+        self.device = torch.device("cuda")
         self.config = config
         self.dtype = dtype
         self.VAE_dtype = VAE_dtype
@@ -80,7 +76,7 @@ class WanI2V:
         self.clip = CLIPModel(
             dtype=config.clip_dtype,
             device=self.device,
-            checkpoint_path=os.path.join(checkpoint_dir , 
+            checkpoint_path=os.path.join(checkpoint_dir ,
                                          config.clip_checkpoint),
             tokenizer_path=os.path.join(checkpoint_dir ,  config.clip_tokenizer))
 
@@ -98,7 +94,7 @@ class WanI2V:
         #     config_text = reader.read()
         # config_json = json.loads(config_text)
         # offload.safetensors2.torch_write_file(audio_processor, "audio_processor_bf16.safetensors", config=config_json)
-        # model_filename = [model_filename, "audio_processor_bf16.safetensors"] 
+        # model_filename = [model_filename, "audio_processor_bf16.safetensors"]
         # model_filename = "c:/temp/i2v480p/diffusion_pytorch_model-00001-of-00007.safetensors"
         # dtype = torch.float16
         self.model = offload.fast_load_transformers_model(model_filename, modelClass=WanModel,do_quantize= quantizeTransformer, writable_tensors= False) #, forcedConfigPath= "c:/temp/i2v720p/config.json")
@@ -144,8 +140,7 @@ class WanI2V:
         model_filename = None,
         **bbargs
     ):
-        r"""
-        Generates video frames from input image and text prompt using diffusion process.
+        r"""Generates video frames from input image and text prompt using diffusion process.
 
         Args:
             input_prompt (`str`):
@@ -179,24 +174,24 @@ class WanI2V:
                 - N: Number of frames (81)
                 - H: Frame height (from max_area)
                 - W: Frame width from max_area)
-        """
 
+        """
         add_frames_for_end_image = "image2video" in model_filename or "fantasy" in model_filename
 
         image_start = TF.to_tensor(image_start)
         lat_frames = int((frame_num - 1) // self.vae_stride[0] + 1)
-        any_end_frame = image_end !=None 
+        any_end_frame = image_end !=None
         if any_end_frame:
             any_end_frame = True
-            image_end = TF.to_tensor(image_end) 
+            image_end = TF.to_tensor(image_end)
             if add_frames_for_end_image:
                 frame_num +=1
                 lat_frames = int((frame_num - 2) // self.vae_stride[0] + 2)
-        
+
         h, w = image_start.shape[1:]
 
         h, w = calculate_new_dimensions(height, width, h, w, fit_into_canvas)
- 
+
         lat_h = round(
             h // self.vae_stride[1] //
             self.patch_size[1] * self.patch_size[1])
@@ -205,7 +200,7 @@ class WanI2V:
             self.patch_size[2] * self.patch_size[2])
         h = lat_h * self.vae_stride[1]
         w = lat_w * self.vae_stride[2]
-        
+
         clip_image_size = self.clip.model.image_size
         img_interpolated = resize_lanczos(image_start, h, w).sub_(0.5).div_(0.5).unsqueeze(0).transpose(0,1).to(self.device) #, self.dtype
         image_start = resize_lanczos(image_start, clip_image_size, clip_image_size)
@@ -220,7 +215,7 @@ class WanI2V:
         seed = seed if seed >= 0 else random.randint(0, sys.maxsize)
         seed_g = torch.Generator(device=self.device)
         seed_g.manual_seed(seed)
-        noise = torch.randn(16, lat_frames, lat_h, lat_w, dtype=torch.float32, generator=seed_g, device=self.device)        
+        noise = torch.randn(16, lat_frames, lat_h, lat_w, dtype=torch.float32, generator=seed_g, device=self.device)
 
         msk = torch.ones(1, frame_num, lat_h, lat_w, device=self.device)
         if any_end_frame:
@@ -300,7 +295,7 @@ class WanI2V:
         # sample videos
         latent = noise
         batch_size  = 1
-        freqs = get_rotary_pos_embed(latent.shape[1:],  enable_RIFLEx= enable_RIFLEx) 
+        freqs = get_rotary_pos_embed(latent.shape[1:],  enable_RIFLEx= enable_RIFLEx)
 
         kwargs = {  'clip_fea': clip_context, 'y': y, 'freqs' : freqs, 'pipeline' : self, 'callback' : callback }
 
@@ -308,7 +303,7 @@ class WanI2V:
             kwargs.update({
             "audio_proj": audio_proj.to(self.dtype),
             "audio_context_lens": audio_context_lens,
-            }) 
+            })
 
         if self.model.enable_teacache:
             self.model.previous_residual = [None] * (3 if audio_cfg_scale !=None else 2)
@@ -329,11 +324,11 @@ class WanI2V:
                 't' :timestep,
                 'current_step' :i,
             })
-              
+
             if guide_scale == 1:
-                noise_pred = self.model( [latent_model_input], context=[context], audio_scale = None if audio_scale == None else [audio_scale], x_id=0, **kwargs, )[0]
+                noise_pred = self.model( [latent_model_input], context=[context], audio_scale = None if audio_scale == None else [audio_scale], x_id=0, **kwargs )[0]
                 if self._interrupt:
-                    return None      
+                    return None
             elif joint_pass:
                 if audio_proj == None:
                     noise_pred_cond, noise_pred_uncond = self.model(
@@ -348,12 +343,12 @@ class WanI2V:
                         **kwargs)
 
                 if self._interrupt:
-                    return None                
+                    return None
             else:
-                noise_pred_cond = self.model( [latent_model_input], context=[context], audio_scale = None if audio_scale == None else [audio_scale], x_id=0, **kwargs, )[0]
+                noise_pred_cond = self.model( [latent_model_input], context=[context], audio_scale = None if audio_scale == None else [audio_scale], x_id=0, **kwargs )[0]
                 if self._interrupt:
                     return None
-                
+
                 if audio_proj != None:
                     noise_pred_noaudio = self.model(
                         [latent_model_input],
@@ -371,14 +366,14 @@ class WanI2V:
                     **kwargs,
                 )[0]
                 if self._interrupt:
-                    return None                
+                    return None
             del latent_model_input
 
             if guide_scale > 1:
                 # CFG Zero *. Thanks to https://github.com/WeichenFan/CFG-Zero-star/
                 if cfg_star_switch:
-                    positive_flat = noise_pred_cond.view(batch_size, -1)  
-                    negative_flat = noise_pred_uncond.view(batch_size, -1)  
+                    positive_flat = noise_pred_cond.view(batch_size, -1)
+                    negative_flat = noise_pred_uncond.view(batch_size, -1)
 
                     alpha = optimized_scale(positive_flat,negative_flat)
                     alpha = alpha.view(batch_size, 1, 1, 1)
@@ -388,10 +383,10 @@ class WanI2V:
                     else:
                         noise_pred_uncond *= alpha
                 if audio_scale == None:
-                    noise_pred = noise_pred_uncond + guide_scale * (noise_pred_cond - noise_pred_uncond)            
+                    noise_pred = noise_pred_uncond + guide_scale * (noise_pred_cond - noise_pred_uncond)
                 else:
-                    noise_pred = noise_pred_uncond + guide_scale * (noise_pred_noaudio - noise_pred_uncond) + audio_cfg_scale * (noise_pred_cond  - noise_pred_noaudio) 
-                              
+                    noise_pred = noise_pred_uncond + guide_scale * (noise_pred_noaudio - noise_pred_uncond) + audio_cfg_scale * (noise_pred_cond  - noise_pred_noaudio)
+
             noise_pred_uncond, noise_pred_noaudio = None, None
             temp_x0 = sample_scheduler.step(
                 noise_pred.unsqueeze(0),
@@ -404,14 +399,14 @@ class WanI2V:
             del timestep
 
             if callback is not None:
-                callback(i, latent, False) 
+                callback(i, latent, False)
 
-        x0 = [latent]        
+        x0 = [latent]
         video = self.vae.decode(x0, VAE_tile_size, any_end_frame= any_end_frame and add_frames_for_end_image)[0]
 
         if any_end_frame and add_frames_for_end_image:
             # video[:,  -1:] = img_interpolated2
-            video = video[:,  :-1]  
+            video = video[:,  :-1]
 
         del noise, latent
         del sample_scheduler

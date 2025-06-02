@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 """MidashNet: Network for monocular depth estimation trained by mixing several datasets.
 This file contains code that is adapted from
 https://github.com/thomasjpfan/pytorch_refinenet/blob/master/pytorch_refinenet/refinenet/refinenet_4cascade.py
 """
 import torch
-import torch.nn as nn
+from torch import nn
 
 from .base_model import BaseModel
 from .blocks import FeatureFusionBlock, Interpolate, _make_encoder
@@ -14,6 +13,7 @@ from .blocks import FeatureFusionBlock, Interpolate, _make_encoder
 class MidasNet(BaseModel):
     """Network for monocular depth estimation.
     """
+
     def __init__(self, path=None, features=256, non_negative=True):
         """Init.
 
@@ -21,6 +21,7 @@ class MidasNet(BaseModel):
             path (str, optional): Path to saved model. Defaults to None.
             features (int, optional): Number of features. Defaults to 256.
             backbone (str, optional): Backbone network for encoder. Defaults to resnet50
+
         """
         print('Loading weights: ', path)
 
@@ -58,8 +59,8 @@ class MidasNet(BaseModel):
 
         Returns:
             tensor: depth
-        """
 
+        """
         layer_1 = self.pretrained.layer1(x)
         layer_2 = self.pretrained.layer2(layer_1)
         layer_3 = self.pretrained.layer3(layer_2)

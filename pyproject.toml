@@ -1,0 +1,152 @@
+[tool.ruff]
+# Set the maximum line length to 88 characters (Black's default)
+# This conforms to flake8 E501 while being more practical than 79 chars
+line-length = 88
+
+# Enable auto-fixing for compatible rules
+fix = true
+
+# Target Python 3.8+ for compatibility
+target-version = "py38"
+
+# Exclude common directories and model checkpoints
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "ckpts",
+    "output",
+    "*.safetensors",
+    "*.bin",
+    "*.pt",
+    "*.pth",
+]
+
+[tool.ruff.lint]
+# Comprehensive rule selection for thorough linting
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "C90",  # mccabe complexity
+    "D",    # pydocstyle
+    "ERA",  # eradicate (commented code)
+    "PL",   # pylint
+    "RUF",  # ruff-specific rules
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "TID",  # flake8-tidy-imports
+    "ARG",  # flake8-unused-arguments
+    "PTH",  # flake8-use-pathlib
+    "FBT",  # flake8-boolean-trap
+    "A",    # flake8-builtins
+    "COM",  # flake8-commas
+    "ICN",  # flake8-import-conventions
+    "G",    # flake8-logging-format
+    "PIE",  # flake8-pie
+    "T20",  # flake8-print
+    "RSE",  # flake8-raise
+    "RET",  # flake8-return
+    "SLF",  # flake8-self
+    "SLOT", # flake8-slots
+    "TRY",  # tryceratops
+]
+
+# Ignore specific rules that may be too strict for AI/ML codebases
+ignore = [
+    "D100",    # Missing docstring in public module
+    "D101",    # Missing docstring in public class
+    "D102",    # Missing docstring in public method
+    "D103",    # Missing docstring in public function
+    "D104",    # Missing docstring in public package
+    "D105",    # Missing docstring in magic method
+    "D107",    # Missing docstring in __init__
+    "D203",    # 1 blank line required before class docstring
+    "D213",    # Multi-line docstring summary should start at the second line
+    "E501",    # Line too long (handled by formatter)
+    "COM812",  # Trailing comma missing (handled by formatter)
+    "ISC001",  # Implicitly concatenated string literals (conflicts with formatter)
+    "PLR0913", # Too many arguments to function call
+    "PLR0915", # Too many statements
+    "PLR2004", # Magic value used in comparison
+    "FBT001",  # Boolean positional arg in function definition
+    "FBT002",  # Boolean default value in function definition
+    "T201",    # print found (common in ML debugging)
+    "ARG002",  # Unused method argument (common in ML callbacks)
+    "N806",    # Variable in function should be lowercase (ML uses CamelCase)
+    "N803",    # Argument name should be lowercase (ML conventions)
+    "B008",    # Do not perform function calls in argument defaults (common in ML)
+    "RUF012",  # Mutable class attributes should be annotated
+]
+
+# Allow fix for all fixable rules
+fixable = ["ALL"]
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+# Test files can have additional flexibility
+"test_*.py" = ["D", "PLR2004", "S101", "TID252"]
+"**/test_*.py" = ["D", "PLR2004", "S101", "TID252"]
+"tests/*.py" = ["D", "PLR2004", "S101", "TID252"]
+
+# Scripts can be more lenient
+"scripts/*.py" = ["T201", "PLR0913"]
+"run_*.py" = ["T201", "PLR0913"]
+"check_*.py" = ["T201", "PLR0913"]
+
+# Config files can have long lines and other exceptions
+"**/config*.py" = ["E501", "PLR0913", "PLR0915"]
+
+[tool.ruff.lint.mccabe]
+# Maximum cyclomatic complexity
+max-complexity = 15
+
+[tool.ruff.lint.isort]
+# Configure import sorting
+combine-as-imports = true
+force-wrap-aliases = true
+known-first-party = ["wan", "hyvideo", "ltx_video", "preprocessing"]
+
+[tool.ruff.format]
+# Use double quotes for strings (consistent with Black)
+quote-style = "double"
+
+# Use 4 spaces for indentation
+indent-style = "space"
+
+# Respect magic trailing commas
+skip-magic-trailing-comma = false
+
+# Automatically detect line endings
+line-ending = "auto"
+
+# Format docstrings
+docstring-code-format = true
+
+# Format code snippets in docstrings
+docstring-code-line-length = 72

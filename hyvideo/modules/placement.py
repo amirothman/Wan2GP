@@ -2,6 +2,7 @@ import torch
 import triton
 import triton.language as tl
 
+
 def hunyuan_token_reorder_to_token_major(tensor, fix_len, reorder_len, reorder_num_frame, frame_size):
     """Reorder it from frame major to token major!"""
     assert reorder_len == reorder_num_frame * frame_size
@@ -30,9 +31,9 @@ def hunyuan_sparse_head_placement_kernel(
     mask_idx_stride_b, mask_idx_stride_h,
     seq_len: tl.constexpr,
     head_dim: tl.constexpr,
-    context_length: tl.constexpr,   
-    num_frame: tl.constexpr,        
-    frame_size: tl.constexpr,      
+    context_length: tl.constexpr,
+    num_frame: tl.constexpr,
+    frame_size: tl.constexpr,
     BLOCK_SIZE: tl.constexpr
 ):
     # Copy query, key, value to output
@@ -43,11 +44,11 @@ def hunyuan_sparse_head_placement_kernel(
 
     start_id = block_id * BLOCK_SIZE
     end_id = start_id + BLOCK_SIZE
-    end_id = tl.where(end_id > seq_len, seq_len, end_id) 
+    end_id = tl.where(end_id > seq_len, seq_len, end_id)
 
     # Load best mask idx (0 is spatial, 1 is temporal)
     is_temporal = tl.load(best_mask_idx_ptr + cfg * mask_idx_stride_b + head * mask_idx_stride_h)
-    
+
     offset_token = tl.arange(0, BLOCK_SIZE) + start_id
     offset_mask = offset_token < seq_len
     offset_d = tl.arange(0, head_dim)
@@ -104,12 +105,12 @@ def hunyuan_sparse_head_placement(query, key, value, query_out, key_out, value_o
     grid = (cfg, num_heads, (seq_len + BLOCK_SIZE - 1) // BLOCK_SIZE)
 
     hunyuan_sparse_head_placement_kernel[grid](
-        query, key, value, 
-        query_out, key_out, value_out, 
+        query, key, value,
+        query_out, key_out, value_out,
         best_mask_idx,
         query.stride(0), query.stride(1), query.stride(2), query.stride(3),
         best_mask_idx.stride(0), best_mask_idx.stride(1),
-        seq_len, head_dim, context_length, num_frame, frame_size, 
+        seq_len, head_dim, context_length, num_frame, frame_size,
         BLOCK_SIZE
     )
 
@@ -230,9 +231,9 @@ def hunyuan_hidden_states_placement_kernel(
     mask_idx_stride_b, mask_idx_stride_h,
     seq_len: tl.constexpr,
     head_dim: tl.constexpr,
-    context_length: tl.constexpr,   
-    num_frame: tl.constexpr,        
-    frame_size: tl.constexpr,      
+    context_length: tl.constexpr,
+    num_frame: tl.constexpr,
+    frame_size: tl.constexpr,
     BLOCK_SIZE: tl.constexpr
 ):
     # Copy hidden_states to output
@@ -243,11 +244,11 @@ def hunyuan_hidden_states_placement_kernel(
 
     start_id = block_id * BLOCK_SIZE
     end_id = start_id + BLOCK_SIZE
-    end_id = tl.where(end_id > seq_len, seq_len, end_id) 
+    end_id = tl.where(end_id > seq_len, seq_len, end_id)
 
     # Load best mask idx (0 is spatial, 1 is temporal)
     is_temporal = tl.load(best_mask_idx_ptr + cfg * mask_idx_stride_b + head * mask_idx_stride_h)
-    
+
     offset_token = tl.arange(0, BLOCK_SIZE) + start_id
     offset_mask = offset_token < seq_len
     offset_d = tl.arange(0, head_dim)
@@ -287,12 +288,12 @@ def hunyuan_hidden_states_placement(hidden_states, hidden_states_out, best_mask_
 
 
     hunyuan_hidden_states_placement_kernel[grid](
-        hidden_states, 
-        hidden_states_out, 
+        hidden_states,
+        hidden_states_out,
         best_mask_idx,
         hidden_states.stride(0), hidden_states.stride(1), hidden_states.stride(2), hidden_states.stride(3),
         best_mask_idx.stride(0), best_mask_idx.stride(1),
-        seq_len, head_dim, context_length, num_frame, frame_size, 
+        seq_len, head_dim, context_length, num_frame, frame_size,
         BLOCK_SIZE
     )
 

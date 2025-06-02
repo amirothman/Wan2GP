@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 # based on https://github.com/isl-org/MiDaS
 
 import cv2
 import torch
-import torch.nn as nn
+from torch import nn
 from torchvision.transforms import Compose
 
 from .dpt_depth import DPTDepthModel
@@ -25,20 +24,15 @@ from .transforms import NormalizeImage, PrepareForNet, Resize
 
 def disabled_train(self, mode=True):
     """Overwrite model.train with this function to make sure train/eval mode
-    does not change anymore."""
+    does not change anymore.
+    """
     return self
 
 
 def load_midas_transform(model_type):
     # https://github.com/isl-org/MiDaS/blob/master/run.py
     # load transform only
-    if model_type == 'dpt_large':  # DPT-Large
-        net_w, net_h = 384, 384
-        resize_mode = 'minimal'
-        normalization = NormalizeImage(mean=[0.5, 0.5, 0.5],
-                                       std=[0.5, 0.5, 0.5])
-
-    elif model_type == 'dpt_hybrid':  # DPT-Hybrid
+    if model_type == 'dpt_large' or model_type == 'dpt_hybrid':  # DPT-Large
         net_w, net_h = 384, 384
         resize_mode = 'minimal'
         normalization = NormalizeImage(mean=[0.5, 0.5, 0.5],

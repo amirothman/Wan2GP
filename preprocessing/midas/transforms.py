@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 import math
 
@@ -15,6 +14,7 @@ def apply_min_size(sample, size, image_interpolation_method=cv2.INTER_AREA):
 
     Returns:
         tuple: new size
+
     """
     shape = list(sample['disparity'].shape)
 
@@ -48,9 +48,10 @@ def apply_min_size(sample, size, image_interpolation_method=cv2.INTER_AREA):
     return tuple(shape)
 
 
-class Resize(object):
+class Resize:
     """Resize sample to given size (width, height).
     """
+
     def __init__(
         self,
         width,
@@ -84,6 +85,7 @@ class Resize(object):
                 "(Output size might be smaller than given size.)"
                 "minimal": Scale as least as possible.  (Output size might be smaller than given size.)
                 Defaults to "lower_bound".
+
         """
         self.__width = width
         self.__height = height
@@ -193,9 +195,10 @@ class Resize(object):
         return sample
 
 
-class NormalizeImage(object):
+class NormalizeImage:
     """Normlize image by given mean and std.
     """
+
     def __init__(self, mean, std):
         self.__mean = mean
         self.__std = std
@@ -206,9 +209,10 @@ class NormalizeImage(object):
         return sample
 
 
-class PrepareForNet(object):
+class PrepareForNet:
     """Prepare sample for usage as network input.
     """
+
     def __init__(self):
         pass
 

@@ -11,21 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
-import numpy as np
 import torch
 import torch.nn.functional as F
-from torch import nn
-from einops import rearrange
-
-from diffusers.utils import is_torch_version, logging
 from diffusers.models.activations import get_activation
-from diffusers.models.attention_processor import SpatialNorm
-from diffusers.models.attention_processor import Attention
-from diffusers.models.normalization import AdaGroupNorm
-from diffusers.models.normalization import RMSNorm
-
+from diffusers.models.attention_processor import Attention, SpatialNorm
+from diffusers.models.normalization import AdaGroupNorm, RMSNorm
+from diffusers.utils import logging
+from einops import rearrange
+from torch import nn
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -67,7 +62,7 @@ class CausalConv3d(nn.Module):
     def forward(self, x):
         x = F.pad(x, self.time_causal_padding, mode=self.pad_mode)
         return self.conv(x)
-    
+
 class CausalAvgPool3d(nn.Module):
     def __init__(
         self,
@@ -96,7 +91,8 @@ class CausalAvgPool3d(nn.Module):
 class UpsampleCausal3D(nn.Module):
     """A 3D upsampling layer with an optional convolution.
 
-    Parameters:
+    Parameters
+    ----------
         channels (`int`):
             number of channels in the inputs and outputs.
         use_conv (`bool`, default `False`):
@@ -107,6 +103,7 @@ class UpsampleCausal3D(nn.Module):
             number of output channels. Defaults to `channels`.
         name (`str`, default `conv`):
             name of the upsampling 3D layer.
+
     """
 
     def __init__(
@@ -197,20 +194,20 @@ class UpsampleCausal3D(nn.Module):
                 if output_size is None:
                     if T > 1:
                         other_h = F.interpolate(other_h, scale_factor=self.upsample_factor, mode="nearest")
-    
+
                     first_h = first_h.squeeze(2)
                     first_h = F.interpolate(first_h, scale_factor=self.upsample_factor[1:], mode="nearest")
                     first_h = first_h.unsqueeze(2)
                 else:
                     assert False, "Not Implement yet"
                     other_h = F.interpolate(other_h, size=output_size, mode="nearest")
-            
+
                 if T > 1:
                     hidden_states = torch.cat((first_h, other_h), dim=2)
                 else:
                     hidden_states = first_h
             else:
-                hidden_states = F.interpolate(hidden_states, scale_factor=self.upsample_factor, mode="nearest")                
+                hidden_states = F.interpolate(hidden_states, scale_factor=self.upsample_factor, mode="nearest")
 
         if dtype == torch.bfloat16:
             hidden_states = hidden_states.to(dtype)
@@ -226,7 +223,8 @@ class UpsampleCausal3D(nn.Module):
 class DownsampleCausal3D(nn.Module):
     """A 3D downsampling layer with an optional convolution.
 
-    Parameters:
+    Parameters
+    ----------
         channels (`int`):
             number of channels in the inputs and outputs.
         use_conv (`bool`, default `False`):
@@ -237,6 +235,7 @@ class DownsampleCausal3D(nn.Module):
             padding for the convolution.
         name (`str`, default `conv`):
             name of the downsampling 3D layer.
+
     """
 
     def __init__(
@@ -298,10 +297,10 @@ class DownsampleCausal3D(nn.Module):
         return hidden_states
 
 class ResnetBlockCausal3D(nn.Module):
-    r"""
-    A Resnet block.
+    r"""A Resnet block.
 
-    Parameters:
+    Parameters
+    ----------
         in_channels (`int`): The number of channels in the input.
         out_channels (`int`, *optional*, default to be `None`):
             The number of output channels for the first conv2d layer. If None, same as `in_channels`.
@@ -326,6 +325,7 @@ class ResnetBlockCausal3D(nn.Module):
             `conv_shortcut` output.
         conv_3d_out_channels (`int`, *optional*, default to `None`): the number of channels in the output.
             If None, same as `out_channels`.
+
     """
 
     def __init__(
@@ -523,7 +523,7 @@ def get_down_block3d(
 ):
     # If attn head dim is not defined, we default it to the number of heads
     if attention_head_dim is None:
-        logger.warn(
+        logger.warning(
             f"It is recommended to provide `attention_head_dim` when calling `get_down_block`. Defaulting `attention_head_dim` to {num_attention_heads}."
         )
         attention_head_dim = num_attention_heads
@@ -578,7 +578,7 @@ def get_up_block3d(
 ) -> nn.Module:
     # If attn head dim is not defined, we default it to the number of heads
     if attention_head_dim is None:
-        logger.warn(
+        logger.warning(
             f"It is recommended to provide `attention_head_dim` when calling `get_up_block`. Defaulting `attention_head_dim` to {num_attention_heads}."
         )
         attention_head_dim = num_attention_heads
@@ -604,8 +604,7 @@ def get_up_block3d(
 
 
 class UNetMidBlockCausal3D(nn.Module):
-    """
-    A 3D UNet mid-block [`UNetMidBlockCausal3D`] with multiple residual blocks and optional attention blocks.
+    """A 3D UNet mid-block [`UNetMidBlockCausal3D`] with multiple residual blocks and optional attention blocks.
 
     Args:
         in_channels (`int`): The number of input channels.
@@ -679,7 +678,7 @@ class UNetMidBlockCausal3D(nn.Module):
         attentions = []
 
         if attention_head_dim is None:
-            logger.warn(
+            logger.warning(
                 f"It is not recommend to pass `attention_head_dim=None`. Defaulting `attention_head_dim` to `in_channels`: {in_channels}."
             )
             attention_head_dim = in_channels
@@ -786,11 +785,11 @@ class DownEncoderBlockCausal3D(nn.Module):
             self.downsamplers = nn.ModuleList(
                 [
                     DownsampleCausal3D(
-                        out_channels, 
-                        use_conv=True, 
-                        out_channels=out_channels, 
-                        padding=downsample_padding, 
-                        name="op", 
+                        out_channels,
+                        use_conv=True,
+                        out_channels=out_channels,
+                        padding=downsample_padding,
+                        name="op",
                         stride=downsample_stride,
                         disable_causal=disable_causal,
                     )
@@ -857,10 +856,10 @@ class UpDecoderBlockCausal3D(nn.Module):
             self.upsamplers = nn.ModuleList(
                 [
                     UpsampleCausal3D(
-                        out_channels, 
-                        use_conv=True, 
-                        out_channels=out_channels, 
-                        upsample_factor=upsample_scale_factor, 
+                        out_channels,
+                        use_conv=True,
+                        out_channels=out_channels,
+                        upsample_factor=upsample_scale_factor,
                         disable_causal=disable_causal
                     )
                 ]

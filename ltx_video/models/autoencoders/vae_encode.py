@@ -1,9 +1,9 @@
 from typing import Tuple
+
 import torch
 from diffusers import AutoencoderKL
 from einops import rearrange
 from torch import Tensor
-
 
 from ltx_video.models.autoencoders.causal_video_autoencoder import (
     CausalVideoAutoencoder,
@@ -25,8 +25,7 @@ def vae_encode(
     split_size: int = 1,
     vae_per_channel_normalize=False,
 ) -> Tensor:
-    """
-    Encodes media items (images or videos) into latent representations using a specified VAE model.
+    """Encodes media items (images or videos) into latent representations using a specified VAE model.
     The function supports processing batches of images or video frames and can handle the processing
     in smaller sub-batches if needed.
 
@@ -54,6 +53,7 @@ def vae_encode(
 
     Note:
         In case of a video, the function encodes the media item frame-by frame.
+
     """
     is_video_shaped = media_items.dim() == 5
     batch_size, channels = media_items.shape[0:2]
@@ -190,8 +190,7 @@ def get_vae_size_scale_factor(vae: AutoencoderKL) -> float:
 def latent_to_pixel_coords(
     latent_coords: Tensor, vae: AutoencoderKL, causal_fix: bool = False
 ) -> Tensor:
-    """
-    Converts latent coordinates to pixel coordinates by scaling them according to the VAE's
+    """Converts latent coordinates to pixel coordinates by scaling them according to the VAE's
     configuration.
 
     Args:
@@ -200,10 +199,11 @@ def latent_to_pixel_coords(
         vae (AutoencoderKL): The VAE model
         causal_fix (bool): Whether to take into account the different temporal scale
             of the first frame. Default = False for backwards compatibility.
+
     Returns:
         Tensor: A tensor of pixel coordinates corresponding to the input latent coordinates.
-    """
 
+    """
     scale_factors = get_vae_size_scale_factor(vae)
     causal_fix = isinstance(vae, CausalVideoAutoencoder) and causal_fix
     pixel_coords = latent_to_pixel_coords_from_factors(

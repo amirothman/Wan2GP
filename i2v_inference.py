@@ -1,19 +1,20 @@
-import os
-import time
 import argparse
-import json
-import torch
-import traceback
 import gc
+import json
+import os
 import random
+import time
+import traceback
+
+import torch
+from mmgp import offload
 
 # These imports rely on your existing code structure
 # They must match the location of your WAN code, etc.
 import wan
-from wan.configs import MAX_AREA_CONFIGS, WAN_CONFIGS
+from wan.configs import WAN_CONFIGS
 from wan.modules.attention import get_attention_modes
 from wan.utils.utils import cache_video
-from mmgp import offload, safetensors2, profile_type
 
 try:
     import triton
@@ -40,8 +41,7 @@ def sanitize_file_name(file_name):
     )
 
 def extract_preset(lset_name, lora_dir, loras):
-    """
-    Load a .lset JSON that lists the LoRA files to apply, plus multipliers
+    """Load a .lset JSON that lists the LoRA files to apply, plus multipliers
     and possibly a suggested prompt prefix.
     """
     lset_name = sanitize_file_name(lset_name)
@@ -53,7 +53,7 @@ def extract_preset(lset_name, lora_dir, loras):
     if not os.path.isfile(lset_name_filename):
         raise ValueError(f"Preset '{lset_name}' not found in {lora_dir}")
 
-    with open(lset_name_filename, "r", encoding="utf-8") as reader:
+    with open(lset_name_filename, encoding="utf-8") as reader:
         text = reader.read()
     lset = json.loads(text)
 
@@ -79,25 +79,22 @@ def extract_preset(lset_name, lora_dir, loras):
     return loras_choices, loras_mult_choices, prompt_prefix, full_prompt
 
 def get_attention_mode(args_attention, installed_modes):
-    """
-    Decide which attention mode to use: either the user choice or auto fallback.
+    """Decide which attention mode to use: either the user choice or auto fallback.
     """
     if args_attention == "auto":
         for candidate in ["sage2", "sage", "sdpa"]:
             if candidate in installed_modes:
                 return candidate
         return "sdpa"  # last fallback
-    elif args_attention in installed_modes:
+    if args_attention in installed_modes:
         return args_attention
-    else:
-        raise ValueError(
-            f"Requested attention mode '{args_attention}' not installed. "
-            f"Installed modes: {installed_modes}"
-        )
+    raise ValueError(
+        f"Requested attention mode '{args_attention}' not installed. "
+        f"Installed modes: {installed_modes}"
+    )
 
 def load_i2v_model(model_filename, text_encoder_filename, is_720p):
-    """
-    Load the i2v model with a specific size config and text encoder.
+    """Load the i2v model with a specific size config and text encoder.
     """
     if is_720p:
         print("Loading 14B-720p i2v model ...")
@@ -127,11 +124,10 @@ def load_i2v_model(model_filename, text_encoder_filename, is_720p):
     return wan_model, pipe
 
 def setup_loras(pipe, lora_dir, lora_preset, num_inference_steps):
+    """Load loras from a directory, optionally apply a preset.
     """
-    Load loras from a directory, optionally apply a preset.
-    """
-    from pathlib import Path
     import glob
+    from pathlib import Path
 
     if not lora_dir or not Path(lora_dir).is_dir():
         print("No valid --lora-dir provided or directory doesn't exist, skipping LoRA setup.")
@@ -180,8 +176,7 @@ def parse_loras_and_activate(
     loras_mult_str,
     num_inference_steps
 ):
-    """
-    Activate the chosen LoRAs with multipliers over the pipeline's transformer.
+    """Activate the chosen LoRAs with multipliers over the pipeline's transformer.
     Supports stepwise expansions (like "0.5,0.8" for partial steps).
     """
     if not loras or not loras_choices:
@@ -190,8 +185,7 @@ def parse_loras_and_activate(
 
     # Handle multipliers
     def is_float_or_comma_list(x):
-        """
-        Example: "0.5", or "0.8,1.0", etc. is valid.
+        """Example: "0.5", or "0.8,1.0", etc. is valid.
         """
         if not x:
             return False
@@ -242,8 +236,7 @@ def parse_loras_and_activate(
     offload.activate_loras(transformer, loras_choices, final_multipliers)
 
 def expand_list_over_steps(short_list, num_steps):
-    """
-    If user gave (0.5, 0.8) for example, expand them over `num_steps`.
+    """If user gave (0.5, 0.8) for example, expand them over `num_steps`.
     The expansion is simply linear slice across steps.
     """
     result = []
@@ -256,8 +249,7 @@ def expand_list_over_steps(short_list, num_steps):
     return result
 
 def download_models_if_needed(transformer_filename_i2v, text_encoder_filename, local_folder=DATA_DIR):
-    """
-    Checks if all required WAN 2.1 i2v files exist locally under 'ckpts/'.
+    """Checks if all required WAN 2.1 i2v files exist locally under 'ckpts/'.
     If not, downloads them from a Hugging Face Hub repo.
     Adjust the 'repo_id' and needed files as appropriate.
     """
@@ -594,18 +586,18 @@ def main():
      # VAE Tiling
     device_mem_capacity = torch.cuda.get_device_properties(0).total_memory / 1048576
     if device_mem_capacity >= 28000:  # 81 frames 720p requires about 28 GB VRAM
-        use_vae_config = 1            
+        use_vae_config = 1
     elif device_mem_capacity >= 8000:
         use_vae_config = 2
-    else:          
+    else:
         use_vae_config = 3
 
     if use_vae_config == 1:
-        VAE_tile_size = 0  
+        VAE_tile_size = 0
     elif use_vae_config == 2:
-        VAE_tile_size = 256  
-    else: 
-        VAE_tile_size = 128  
+        VAE_tile_size = 256
+    else:
+        VAE_tile_size = 128
 
     print('Using VAE tile size of', VAE_tile_size)
 
@@ -642,9 +634,8 @@ def main():
         s = str(e).lower()
         if any(keyword in s for keyword in ["memory", "cuda", "alloc"]):
             raise RuntimeError("Likely out-of-VRAM or out-of-RAM error. " + err_str)
-        else:
-            traceback.print_exc()
-            raise RuntimeError(err_str)
+        traceback.print_exc()
+        raise RuntimeError(err_str)
 
     # After generation
     offloadobj.unload_all()

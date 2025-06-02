@@ -1,10 +1,9 @@
-import importlib.metadata
 import math
+from importlib.metadata import version
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from importlib.metadata import version
+
 
 def clear_list(l):
     for i in range(len(l)):
@@ -12,8 +11,10 @@ def clear_list(l):
 
 try:
     import flash_attn
-    from flash_attn.flash_attn_interface import _flash_attn_forward
-    from flash_attn.flash_attn_interface import flash_attn_varlen_func
+    from flash_attn.flash_attn_interface import (
+        _flash_attn_forward,
+        flash_attn_varlen_func,
+    )
 except ImportError:
     flash_attn = None
     flash_attn_varlen_func = None
@@ -142,6 +143,7 @@ def get_cu_seqlens(text_mask, img_len):
 
     Returns:
         torch.Tensor: the calculated cu_seqlens for flash attention
+
     """
     batch_size = text_mask.shape[0]
     text_len = text_mask.sum(dim=1)
@@ -171,8 +173,7 @@ def attention(
     max_seqlen_kv=None,
     batch_size=1,
 ):
-    """
-    Perform QKV self attention.
+    """Perform QKV self attention.
 
     Args:
         q (torch.Tensor): Query tensor with shape [b, s, a, d], where a is the number of heads.
@@ -192,13 +193,14 @@ def attention(
 
     Returns:
         torch.Tensor: Output tensor after self attention with shape [b, s, ad]
+
     """
     pre_attn_layout, post_attn_layout = MEMORY_LAYOUT[mode]
     q , k , v = qkv_list
     clear_list(qkv_list)
     del qkv_list
     padding_length = 0
-    # if attn_mask == None and mode == "sdpa": 
+    # if attn_mask == None and mode == "sdpa":
     #     padding_length  = q.shape[1] - cu_seqlens_q
     #     q = q[:, :cu_seqlens_q, ... ]
     #     k = k[:, :cu_seqlens_kv, ... ]
@@ -214,10 +216,10 @@ def attention(
         x = F.scaled_dot_product_attention(
             q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal
         )
-        
+
     elif mode == "sdpa":
         # if attn_mask is not None and attn_mask.dtype != torch.bool:
-        #     attn_mask = attn_mask.to(q.dtype)            
+        #     attn_mask = attn_mask.to(q.dtype)
         # x = F.scaled_dot_product_attention(
         #     q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal
         # )
@@ -249,7 +251,7 @@ def attention(
         # x with shape [(bxs), a, d]
         x = x.view(
             batch_size, max_seqlen_q, x.shape[-2], x.shape[-1]
-        )  # reshape x to [b, s, a, d]      
+        )  # reshape x to [b, s, a, d]
 
     elif mode == "flash":
         x = flash_attn_varlen_func(

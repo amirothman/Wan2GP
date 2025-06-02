@@ -1,16 +1,17 @@
-from typing import List, Optional, Iterable
 import logging
-from omegaconf import DictConfig
+from collections.abc import Iterable
+from typing import List, Optional
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+from omegaconf import DictConfig
 
+from ...utils.tensor_utils import aggregate, pad_divide_by, unpad
+from ..model.matanyone import MatAnyone
+from .image_feature_store import ImageFeatureStore
 from .memory_manager import MemoryManager
 from .object_manager import ObjectManager
-from .image_feature_store import ImageFeatureStore
-from ..model.matanyone import MatAnyone
-from ...utils.tensor_utils import pad_divide_by, unpad, aggregate
 
 log = logging.getLogger()
 
@@ -69,7 +70,7 @@ class InferenceCore:
     def update_config(self, cfg):
         self.mem_every = cfg['mem_every']
         self.memory.update_config(cfg)
-    
+
     def clear_temp_mem(self):
         self.memory.clear_work_mem()
         # self.object_manager = ObjectManager()
@@ -86,8 +87,7 @@ class InferenceCore:
                     *,
                     is_deep_update: bool = True,
                     force_permanent: bool = False) -> None:
-        """
-        Memorize the given segmentation in all memory stores.
+        """Memorize the given segmentation in all memory stores.
 
         The batch dimension is 1 if flip augmentation is not used.
         image: RGB image, (1/2)*3*H*W
@@ -100,7 +100,7 @@ class InferenceCore:
         """
         if prob.shape[1] == 0:
             # nothing to add
-            log.warn('Trying to add an empty object mask to memory!')
+            log.warning('Trying to add an empty object mask to memory!')
             return
 
         if force_permanent:
@@ -135,8 +135,7 @@ class InferenceCore:
                  pix_feat: torch.Tensor,
                  ms_features: Iterable[torch.Tensor],
                  update_sensory: bool = True) -> torch.Tensor:
-        """
-        Produce a segmentation using the given features and the memory
+        """Produce a segmentation using the given features and the memory
 
         The batch dimension is 1 if flip augmentation is not used.
         key/selection: for anisotropic l2: (1/2) * _ * H * W
@@ -154,17 +153,17 @@ class InferenceCore:
             assert bs == 1
 
         if not self.memory.engaged:
-            log.warn('Trying to segment without any memory!')
+            log.warning('Trying to segment without any memory!')
             return torch.zeros((1, key.shape[-2] * 16, key.shape[-1] * 16),
                                device=key.device,
                                dtype=key.dtype)
-        
+
         uncert_output = None
 
         if self.curr_ti == 0: # ONLY for the first frame for prediction
             memory_readout = self.memory.read_first_frame(self.last_msk_value, pix_feat, self.last_mask, self.network, uncert_output=uncert_output)
         else:
-            memory_readout = self.memory.read(pix_feat, key, selection, self.last_mask, self.network, uncert_output=uncert_output, last_msk_value=self.last_msk_value, ti=self.curr_ti, 
+            memory_readout = self.memory.read(pix_feat, key, selection, self.last_mask, self.network, uncert_output=uncert_output, last_msk_value=self.last_msk_value, ti=self.curr_ti,
                                               last_pix_feat=self.last_pix_feat, last_pred_mask=self.last_mask)
         memory_readout = self.object_manager.realize_dict(memory_readout)
 
@@ -184,12 +183,12 @@ class InferenceCore:
         if update_sensory:
             self.memory.update_sensory(sensory, self.object_manager.all_obj_ids)
         return pred_prob_with_bg
-    
+
     def pred_all_flow(self, images):
         self.total_len = images.shape[0]
         images, self.pad = pad_divide_by(images, 16)
         images = images.unsqueeze(0)  # add the batch dimension: (1,t,c,h,w)
-        
+
         self.flows_forward, self.flows_backward = self.network.pred_forward_backward_flow(images)
 
     def encode_all_images(self, images):
@@ -208,8 +207,7 @@ class InferenceCore:
              force_permanent: bool = False,
              matting: bool = True,
              first_frame_pred: bool = False) -> torch.Tensor:
-        """
-        Take a step with a new incoming image.
+        """Take a step with a new incoming image.
         If there is an incoming mask with new objects, we will memorize them.
         If there is no incoming mask, we will segment the image using the memory.
         In both cases, we will update the memory and return a segmentation.
@@ -328,7 +326,7 @@ class InferenceCore:
                 if len(objects) == 0:
                     if delete_buffer:
                         self.image_feature_store.delete(self.curr_ti)
-                    log.warn('Trying to insert an empty mask as memory!')
+                    log.warning('Trying to insert an empty mask as memory!')
                     return torch.zeros((1, key.shape[-2] * 16, key.shape[-1] * 16),
                                        device=key.device,
                                        dtype=key.dtype)
@@ -361,7 +359,7 @@ class InferenceCore:
                              selection,
                              force_permanent=force_permanent,
                              is_deep_update=True)
-        else: # compute self.last_msk_value for non-memory frame 
+        else: # compute self.last_msk_value for non-memory frame
             msk_value, _, _, _ = self.network.encode_mask(
                             image,
                             pix_feat,
@@ -386,8 +384,7 @@ class InferenceCore:
         return output_prob
 
     def delete_objects(self, objects: List[int]) -> None:
-        """
-        Delete the given objects from the memory.
+        """Delete the given objects from the memory.
         """
         self.object_manager.delete_objects(objects)
         self.memory.purge_except(self.object_manager.all_obj_ids)

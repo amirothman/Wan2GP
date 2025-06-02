@@ -1,8 +1,8 @@
-from .models import HYVideoDiffusionTransformer, HUNYUAN_VIDEO_CONFIG
+from .models import HUNYUAN_VIDEO_CONFIG, HYVideoDiffusionTransformer
 
 
 def load_model(model, i2v_condition_type, in_channels, out_channels, factor_kwargs):
-    """load hunyuan video model
+    """Load hunyuan video model
 
     Args:
         args (dict): model args
@@ -12,6 +12,7 @@ def load_model(model, i2v_condition_type, in_channels, out_channels, factor_kwar
 
     Returns:
         model (nn.Module): The hunyuan video model
+
     """
     if model in HUNYUAN_VIDEO_CONFIG.keys():
         model = HYVideoDiffusionTransformer(
@@ -22,5 +23,4 @@ def load_model(model, i2v_condition_type, in_channels, out_channels, factor_kwar
             **factor_kwargs,
         )
         return model
-    else:
-        raise NotImplementedError()
+    raise NotImplementedError

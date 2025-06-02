@@ -2,9 +2,9 @@ import math
 from typing import Tuple, Union
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+from torch import nn
 
 
 class DualConv3d(nn.Module):
@@ -97,8 +97,7 @@ class DualConv3d(nn.Module):
     def forward(self, x, use_conv3d=False, skip_time_conv=False):
         if use_conv3d:
             return self.forward_with_3d(x=x, skip_time_conv=skip_time_conv)
-        else:
-            return self.forward_with_2d(x=x, skip_time_conv=skip_time_conv)
+        return self.forward_with_2d(x=x, skip_time_conv=skip_time_conv)
 
     def forward_with_3d(self, x, skip_time_conv):
         # First convolution

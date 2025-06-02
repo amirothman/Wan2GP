@@ -15,8 +15,7 @@ def get_timestep_embedding(
     scale: float = 1,
     max_period: int = 10000,
 ):
-    """
-    This matches the implementation in Denoising Diffusion Probabilistic Models: Create sinusoidal timestep embeddings.
+    """This matches the implementation in Denoising Diffusion Probabilistic Models: Create sinusoidal timestep embeddings.
 
     :param timesteps: a 1-D Tensor of N indices, one per batch element.
                       These may be fractional.
@@ -51,8 +50,7 @@ def get_timestep_embedding(
 
 
 def get_3d_sincos_pos_embed(embed_dim, grid, w, h, f):
-    """
-    grid_size: int of the grid height and width return: pos_embed: [grid_size*grid_size, embed_dim] or
+    """grid_size: int of the grid height and width return: pos_embed: [grid_size*grid_size, embed_dim] or
     [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
     """
     grid = rearrange(grid, "c (f h w) -> c f h w", h=h, w=w)
@@ -77,8 +75,7 @@ def get_3d_sincos_pos_embed_from_grid(embed_dim, grid):
 
 
 def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
-    """
-    embed_dim: output dimension for each position pos: a list of positions to be encoded: size (M,) out: (M, D)
+    """embed_dim: output dimension for each position pos: a list of positions to be encoded: size (M,) out: (M, D)
     """
     if embed_dim % 2 != 0:
         raise ValueError("embed_dim must be divisible by 2")

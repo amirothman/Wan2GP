@@ -4,10 +4,10 @@
 from functools import partial
 
 import torch
-import torch.nn as nn
+from torch import nn
 
-from .modulate_layers import modulate_
 from ..utils.helpers import to_2tuple
+from .modulate_layers import modulate_
 
 
 class MLP(nn.Module):
@@ -70,11 +70,11 @@ class MLP(nn.Module):
             mlp_chunk = self.norm(mlp_chunk)
             mlp_chunk = self.fc2(mlp_chunk)
             x_chunk[...] = self.drop2(mlp_chunk)
-        return x        
+        return x
 
-# 
 class MLPEmbedder(nn.Module):
     """copied from https://github.com/black-forest-labs/flux/blob/main/src/flux/modules/layers.py"""
+
     def __init__(self, in_dim: int, hidden_dim: int, device=None, dtype=None):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()

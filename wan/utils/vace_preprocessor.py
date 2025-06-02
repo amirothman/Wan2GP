@@ -1,14 +1,14 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 import numpy as np
-from PIL import Image
 import torch
 import torch.nn.functional as F
 import torchvision.transforms.functional as TF
+from PIL import Image
+
 from .utils import calculate_new_dimensions
 
 
-class VaceImageProcessor(object):
+class VaceImageProcessor:
     def __init__(self, downsample=None, seq_len=None):
         self.downsample = downsample
         self.seq_len = seq_len
@@ -35,8 +35,7 @@ class VaceImageProcessor(object):
         return img
 
     def _resize_crop(self, img, oh, ow, normalize=True):
-        """
-        Resize, center crop, convert to tensor, and normalize.
+        """Resize, center crop, convert to tensor, and normalize.
         """
         # resize and crop
         iw, ih = img.size
@@ -58,7 +57,7 @@ class VaceImageProcessor(object):
         if normalize:
             img = TF.to_tensor(img).sub_(0.5).div_(0.5).unsqueeze(1)
         return img
-    
+
     def _image_preprocess(self, img, oh, ow, normalize=True, **kwargs):
         return self._resize_crop(img, oh, ow, normalize)
 
@@ -86,7 +85,7 @@ class VaceImageProcessor(object):
         return *imgs, (oh, ow)
 
 
-class VaceVideoProcessor(object):
+class VaceVideoProcessor:
     def __init__(self, downsample, min_area, max_area, min_fps, max_fps, zero_start, seq_len, keep_last, **kwargs):
         self.downsample = downsample
         self.min_area = min_area
@@ -100,18 +99,21 @@ class VaceVideoProcessor(object):
 
     @staticmethod
     def resize_crop(video: torch.Tensor, oh: int, ow: int):
-        """
-        Resize, center crop and normalize for decord loaded video (torch.Tensor type)
+        """Resize, center crop and normalize for decord loaded video (torch.Tensor type)
 
-        Parameters:
+        Parameters
+        ----------
           video - video to process (torch.Tensor): Tensor from `reader.get_batch(frame_ids)`, in shape of (T, H, W, C)
           oh - target height (int)
           ow - target width (int)
 
-        Returns:
+        Returns
+        -------
             The processed video (torch.Tensor): Normalized tensor range [-1, 1], in shape of (C, T, H, W)
 
-        Raises:
+        Raises
+        ------
+
         """
         # permute ([t, h, w, c] -> [t, c, h, w])
         video = video.permute(0, 3, 1, 2)
@@ -182,7 +184,7 @@ class VaceVideoProcessor(object):
         return frame_ids, (x1, x2, y1, y2), (oh, ow), target_fps
 
 
-        
+
     def _get_frameid_bbox_adjust_last(self, fps, video_frames_count, canvas_height, canvas_width, h, w,  fit_into_canvas, crop_box, rng, max_frames= 0, start_frame =0):
         from wan.utils.utils import resample
 
@@ -199,8 +201,7 @@ class VaceVideoProcessor(object):
     def _get_frameid_bbox(self, fps, video_frames_count, h, w, crop_box, rng, max_frames= 0, start_frame= 0, canvas_height = 0, canvas_width = 0, fit_into_canvas= True):
         if self.keep_last:
             return self._get_frameid_bbox_adjust_last(fps, video_frames_count, canvas_height, canvas_width, h, w, fit_into_canvas, crop_box, rng, max_frames= max_frames, start_frame= start_frame)
-        else:
-            return self._get_frameid_bbox_default(fps, video_frames_count, h, w, crop_box, rng, max_frames= max_frames)
+        return self._get_frameid_bbox_default(fps, video_frames_count, h, w, crop_box, rng, max_frames= max_frames)
 
     def load_video(self, data_key, crop_box=None, seed=2024, **kwargs):
         return self.load_video_batch(data_key, crop_box=crop_box, seed=seed, **kwargs)

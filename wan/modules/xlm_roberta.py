@@ -1,8 +1,8 @@
 # Modified from transformers.models.xlm_roberta.modeling_xlm_roberta
 # Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 __all__ = ['XLMRoberta', 'xlm_roberta_large']
 
@@ -25,8 +25,7 @@ class SelfAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, mask):
-        """
-        x:   [B, L, C].
+        """x:   [B, L, C].
         """
         b, s, c, n, d = *x.size(), self.num_heads, self.head_dim
 
@@ -74,8 +73,7 @@ class AttentionBlock(nn.Module):
 
 
 class XLMRoberta(nn.Module):
-    """
-    XLMRobertaModel with no pooler and no LM head.
+    """XLMRobertaModel with no pooler and no LM head.
     """
 
     def __init__(self,
@@ -116,8 +114,7 @@ class XLMRoberta(nn.Module):
         self.norm = nn.LayerNorm(dim, eps=eps)
 
     def forward(self, ids):
-        """
-        ids: [B, L] of torch.LongTensor.
+        """ids: [B, L] of torch.LongTensor.
         """
         b, s = ids.shape
         mask = ids.ne(self.pad_id).long()
@@ -147,8 +144,7 @@ def xlm_roberta_large(pretrained=False,
                       return_tokenizer=False,
                       device='cpu',
                       **kwargs):
-    """
-    XLMRobertaLarge adapted from Huggingface.
+    """XLMRobertaLarge adapted from Huggingface.
     """
     # params
     cfg = dict(

@@ -1,5 +1,5 @@
 import logging
-from typing import Union, List, Optional
+from typing import List, Optional, Union
 
 import torch
 from PIL import Image

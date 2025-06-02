@@ -1,9 +1,10 @@
 from typing import Optional
-from omegaconf import DictConfig
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from omegaconf import DictConfig
+from torch import nn
+
 from .positional_encoding import PositionalEncoding
 
 
@@ -85,5 +86,4 @@ class ObjectSummarizer(nn.Module):
 
         if need_weights:
             return summaries, logits
-        else:
-            return summaries, None
+        return summaries, None

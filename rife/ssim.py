@@ -1,7 +1,7 @@
+from math import exp
+
 import torch
 import torch.nn.functional as F
-from math import exp
-import numpy as np
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -45,7 +45,7 @@ def ssim(img1, img2, window_size=11, window=None, size_average=True, full=False,
     if window is None:
         real_size = min(window_size, height, width)
         window = create_window(real_size, channel=channel).to(img1.device)
-    
+
     # mu1 = F.conv2d(img1, window, padding=padd, groups=channel)
     # mu2 = F.conv2d(img2, window, padding=padd, groups=channel)
     mu1 = F.conv2d(F.pad(img1, (5, 5, 5, 5), mode='replicate'), window, padding=padd, groups=channel)

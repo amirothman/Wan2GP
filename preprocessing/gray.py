@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 
 import cv2
 import numpy as np
-from PIL import Image
 import torch
+from PIL import Image
+
 
 def convert_to_numpy(image):
     if isinstance(image, Image.Image):

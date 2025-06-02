@@ -1,26 +1,31 @@
-import os
-import time
 import random
-import functools
-from typing import List, Optional, Tuple, Union
+import time
+from typing import List, Optional
 
-from pathlib import Path
-
-import torch
-import torch.distributed as dist
-from hyvideo.constants import PROMPT_TEMPLATE, NEGATIVE_PROMPT, PRECISION_TO_TYPE, NEGATIVE_PROMPT_I2V
-from hyvideo.vae import load_vae
-from hyvideo.modules import load_model
-from hyvideo.text_encoder import TextEncoder
-from hyvideo.utils.data_utils import align_to, get_closest_ratio, generate_crop_size_list
-from hyvideo.modules.posemb_layers import get_nd_rotary_pos_embed, get_nd_rotary_pos_embed_new 
-from hyvideo.diffusion.schedulers import FlowMatchDiscreteScheduler
-from hyvideo.diffusion.pipelines import HunyuanVideoPipeline
-from PIL import Image
-import numpy as np
-import torchvision.transforms as transforms
 import cv2
-from wan.utils.utils import resize_lanczos, calculate_new_dimensions
+import numpy as np
+import torch
+from PIL import Image
+from torchvision import transforms
+
+from hyvideo.constants import (
+    NEGATIVE_PROMPT,
+    NEGATIVE_PROMPT_I2V,
+    PRECISION_TO_TYPE,
+    PROMPT_TEMPLATE,
+)
+from hyvideo.diffusion.pipelines import HunyuanVideoPipeline
+from hyvideo.diffusion.schedulers import FlowMatchDiscreteScheduler
+from hyvideo.modules import load_model
+from hyvideo.modules.posemb_layers import (
+    get_nd_rotary_pos_embed,
+    get_nd_rotary_pos_embed_new,
+)
+from hyvideo.text_encoder import TextEncoder
+from hyvideo.utils.data_utils import align_to
+from hyvideo.vae import load_vae
+from wan.utils.utils import calculate_new_dimensions
+
 
 def pad_image(crop_img, size, color=(255, 255, 255), resize_ratio=1):
     crop_h, crop_w = crop_img.shape[:2]
@@ -120,7 +125,7 @@ def _merge_input_ids_with_image_features(self, image_features, inputs_embeds, in
         final_labels = None
 
     return final_embedding, final_attention_mask, final_labels, position_ids
-    
+
 def patched_llava_forward(
     self,
     input_ids: torch.LongTensor = None,
@@ -212,13 +217,13 @@ def patched_llava_forward(
         image_hidden_states=image_features if pixel_values is not None else None,
     )
 
-class DataPreprocess(object):
+class DataPreprocess:
     def __init__(self):
         self.llava_size = (336, 336)
         self.llava_transform = transforms.Compose(
             [
-                transforms.Resize(self.llava_size, interpolation=transforms.InterpolationMode.BILINEAR), 
-                transforms.ToTensor(), 
+                transforms.Resize(self.llava_size, interpolation=transforms.InterpolationMode.BILINEAR),
+                transforms.ToTensor(),
                 transforms.Normalize((0.48145466, 0.4578275, 0.4082107), (0.26862954, 0.26130258, 0.27577711)),
             ]
         )
@@ -235,12 +240,12 @@ class DataPreprocess(object):
         # batch = {
         #     "pixel_value_llava": llava_item_tensor.unsqueeze(0),
         #     "uncond_pixel_value_llava": uncond_llava_item_tensor.unsqueeze(0),
-        #     'pixel_value_ref': cat_item_tensor.unsqueeze(0), 
+        #     'pixel_value_ref': cat_item_tensor.unsqueeze(0),
         # }
         return llava_item_tensor.unsqueeze(0), uncond_llava_item_tensor.unsqueeze(0), cat_item_tensor.unsqueeze(0)
 
-class Inference(object):
-    def __init__(        
+class Inference:
+    def __init__(
         self,
         i2v,
         enable_cfg,
@@ -270,7 +275,7 @@ class Inference(object):
     @classmethod
     def from_pretrained(cls, model_filepath, text_encoder_filepath, dtype = torch.bfloat16, VAE_dtype = torch.float16, mixed_precision_transformer =torch.bfloat16 , **kwargs):
 
-        device = "cuda" 
+        device = "cuda"
 
         import transformers
         transformers.models.llava.modeling_llava.LlavaForConditionalGeneration.forward = patched_llava_forward # force legacy behaviour to be able to use tansformers v>(4.47)
@@ -280,7 +285,7 @@ class Inference(object):
         text_len = 512
         latent_channels = 16
         precision = "bf16"
-        vae_precision = "fp32" if VAE_dtype == torch.float32 else "bf16" 
+        vae_precision = "fp32" if VAE_dtype == torch.float32 else "bf16"
         embedded_cfg_scale = 6
         i2v_condition_type = None
         i2v_mode = "i2v" in model_filepath[0]
@@ -305,7 +310,7 @@ class Inference(object):
             image_embed_interleave = 1
         out_channels = latent_channels
         pinToMemory = kwargs.pop("pinToMemory", False)
-        partialPinning = kwargs.pop("partialPinning", False)        
+        partialPinning = kwargs.pop("partialPinning", False)
         factor_kwargs = kwargs | {"device": "meta", "dtype": PRECISION_TO_TYPE[precision]}
 
         if embedded_cfg_scale and i2v_mode:
@@ -319,13 +324,12 @@ class Inference(object):
             factor_kwargs=factor_kwargs,
         )
 
-  
+
         from mmgp import offload
         # model = Inference.load_state_dict(args, model, model_filepath)
 
         # model_filepath ="c:/temp/hc/mp_rank_00_model_states.pt"
         offload.load_model_data(model, model_filepath, pinToMemory = pinToMemory, partialPinning = partialPinning)
-        pass
         # offload.save_model(model, "hunyuan_video_custom_720_bf16.safetensors")
         # offload.save_model(model, "hunyuan_video_custom_720_quanto_bf16_int8.safetensors", do_quantize= True)
 
@@ -348,7 +352,7 @@ class Inference(object):
     # config = AutoencoderKLCausal3D.load_config("ckpts/hunyuan_video_VAE_config.json")
     # config = AutoencoderKLCausal3D.load_config("c:/temp/hvae/config_vae.json")
 
-        vae, _, s_ratio, t_ratio = load_vae( "884-16c-hy", vae_path= vae_filepath, vae_config_path= vae_configpath, vae_precision= vae_precision, device= "cpu", )
+        vae, _, s_ratio, t_ratio = load_vae( "884-16c-hy", vae_path= vae_filepath, vae_config_path= vae_configpath, vae_precision= vae_precision, device= "cpu" )
 
         vae._model_dtype =  torch.float32 if VAE_dtype == torch.float32 else  torch.bfloat16
         vae_kwargs = {"s_ratio": s_ratio, "t_ratio": t_ratio}
@@ -384,7 +388,7 @@ class Inference(object):
 
         # prompt_template_video
         prompt_template_video = PROMPT_TEMPLATE[prompt_template_video] if prompt_template_video is not None else None
-        
+
 
         text_encoder = TextEncoder(
             text_encoder_type=text_encoder,
@@ -399,7 +403,7 @@ class Inference(object):
             reproduce=True,
             device="cpu",
             image_embed_interleave=image_embed_interleave,
-   			text_encoder_path = text_encoder_filepath            
+   			text_encoder_path = text_encoder_filepath
         )
 
         text_encoder_2 = TextEncoder(
@@ -422,7 +426,7 @@ class Inference(object):
             device=device,
         )
 
-  
+
 
 class HunyuanVideoSampler(Inference):
     def __init__(
@@ -470,7 +474,7 @@ class HunyuanVideoSampler(Inference):
 
     @_interrupt.setter
     def _interrupt(self, value):
-        self.pipeline._interrupt =value 
+        self.pipeline._interrupt =value
 
     def load_diffusion_pipeline(
         self,
@@ -499,7 +503,7 @@ class HunyuanVideoSampler(Inference):
             scheduler=scheduler,
             progress_bar_config=progress_bar_config,
         )
- 
+
         return pipeline
 
     def get_rotary_pos_embed_new(self, video_length, height, width, concat_dict={}):
@@ -525,14 +529,14 @@ class HunyuanVideoSampler(Inference):
         if rope_dim_list is None:
             rope_dim_list = [head_dim // target_ndim for _ in range(target_ndim)]
         assert sum(rope_dim_list) == head_dim, "sum(rope_dim_list) should equal to head_dim of attention layer"
-        freqs_cos, freqs_sin = get_nd_rotary_pos_embed_new(rope_dim_list, 
-                                                    rope_sizes, 
-                                                    theta=256, 
+        freqs_cos, freqs_sin = get_nd_rotary_pos_embed_new(rope_dim_list,
+                                                    rope_sizes,
+                                                    theta=256,
                                                     use_real=True,
                                                     theta_rescale_factor=1,
                                                     concat_dict=concat_dict)
         return freqs_cos, freqs_sin
-        
+
     def get_rotary_pos_embed(self, video_length, height, width, enable_riflex = False):
         target_ndim = 3
         ndim = 5 - 2
@@ -738,7 +742,7 @@ class HunyuanVideoSampler(Inference):
                 raise ValueError(f"i2v_resolution: {i2v_resolution} must be in [360p, 540p, 720p]")
 
             # semantic_images = [Image.open(i2v_image_path).convert('RGB')]
-            semantic_images = [image_start.convert('RGB')] #
+            semantic_images = [image_start.convert('RGB')]
             origin_size = semantic_images[0].size
             h, w = origin_size
             h, w = calculate_new_dimensions(height, width, h, w, fit_into_canvas)
@@ -769,7 +773,7 @@ class HunyuanVideoSampler(Inference):
         if input_ref_images == None:
             freqs_cos, freqs_sin = self.get_rotary_pos_embed(target_frame_num, target_height, target_width, enable_riflex)
         else:
-            concat_dict = {'mode': 'timecat-w', 'bias': -1} 
+            concat_dict = {'mode': 'timecat-w', 'bias': -1}
             freqs_cos, freqs_sin = self.get_rotary_pos_embed_new(target_frame_num, target_height, target_width, concat_dict)
 
         n_tokens = freqs_cos.shape[0]
@@ -785,7 +789,7 @@ class HunyuanVideoSampler(Inference):
 
         #     "pixel_value_llava": llava_item_tensor.unsqueeze(0),
         #     "uncond_pixel_value_llava": uncond_llava_item_tensor.unsqueeze(0),
-        #     'pixel_value_ref': cat_item_tensor.unsqueeze(0), 
+        #     'pixel_value_ref': cat_item_tensor.unsqueeze(0),
         if input_ref_images  == None:
             pixel_value_llava, uncond_pixel_value_llava, pixel_value_ref = None, None, None
             name = None
@@ -803,11 +807,11 @@ class HunyuanVideoSampler(Inference):
             generator=generator,
             output_type="pil",
             name = name,
-            pixel_value_llava = pixel_value_llava, 
-            uncond_pixel_value_llava=uncond_pixel_value_llava, 
+            pixel_value_llava = pixel_value_llava,
+            uncond_pixel_value_llava=uncond_pixel_value_llava,
             pixel_value_ref=pixel_value_ref,
             denoise_strength=denoise_strength,
-            ip_cfg_scale=ip_cfg_scale,             
+            ip_cfg_scale=ip_cfg_scale,
             freqs_cis=(freqs_cos, freqs_sin),
             n_tokens=n_tokens,
             embedded_guidance_scale=embedded_guidance_scale,

@@ -7,7 +7,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from http import HTTPStatus
-from typing import Optional, Union
+from typing import Union
 
 import dashscope
 import torch
@@ -98,7 +98,7 @@ VL_EN_SYS_PROMPT =  \
 
 
 @dataclass
-class PromptOutput(object):
+class PromptOutput:
     status: bool
     prompt: str
     seed: int
@@ -132,8 +132,7 @@ class PromptExpander:
         zh = tar_lang == "ch"
         if zh:
             return LM_CH_SYS_PROMPT if not self.is_vl else VL_CH_SYS_PROMPT
-        else:
-            return LM_EN_SYS_PROMPT if not self.is_vl else VL_EN_SYS_PROMPT
+        return LM_EN_SYS_PROMPT if not self.is_vl else VL_EN_SYS_PROMPT
 
     def __call__(self,
                  prompt,
@@ -148,10 +147,9 @@ class PromptExpander:
         if image is not None and self.is_vl:
             return self.extend_with_img(
                 prompt, system_prompt, image=image, seed=seed, *args, **kwargs)
-        elif not self.is_vl:
+        if not self.is_vl:
             return self.extend(prompt, system_prompt, seed, *args, **kwargs)
-        else:
-            raise NotImplementedError
+        raise NotImplementedError
 
 
 class DashScopePromptExpander(PromptExpander):
@@ -163,15 +161,15 @@ class DashScopePromptExpander(PromptExpander):
                  retry_times=4,
                  is_vl=False,
                  **kwargs):
-        '''
-        Args:
-            api_key: The API key for Dash Scope authentication and access to related services.
-            model_name: Model name, 'qwen-plus' for extending prompts, 'qwen-vl-max' for extending prompt-images.
-            max_image_size: The maximum size of the image; unit unspecified (e.g., pixels, KB). Please specify the unit based on actual usage.
-            retry_times: Number of retry attempts in case of request failure.
-            is_vl: A flag indicating whether the task involves visual-language processing.
-            **kwargs: Additional keyword arguments that can be passed to the function or method.
-        '''
+        """Args:
+        api_key: The API key for Dash Scope authentication and access to related services.
+        model_name: Model name, 'qwen-plus' for extending prompts, 'qwen-vl-max' for extending prompt-images.
+        max_image_size: The maximum size of the image; unit unspecified (e.g., pixels, KB). Please specify the unit based on actual usage.
+        retry_times: Number of retry attempts in case of request failure.
+        is_vl: A flag indicating whether the task involves visual-language processing.
+        **kwargs: Additional keyword arguments that can be passed to the function or method.
+
+        """
         if model_name is None:
             model_name = 'qwen-plus' if not is_vl else 'qwen-vl-max'
         super().__init__(model_name, is_vl, **kwargs)
@@ -307,21 +305,21 @@ class QwenPromptExpander(PromptExpander):
     }
 
     def __init__(self, model_name=None, device=0, is_vl=False, **kwargs):
-        '''
-        Args:
-            model_name: Use predefined model names such as 'QwenVL2.5_7B' and 'Qwen2.5_14B',
-                which are specific versions of the Qwen model. Alternatively, you can use the
-                local path to a downloaded model or the model name from Hugging Face."
-              Detailed Breakdown:
-                Predefined Model Names:
-                * 'QwenVL2.5_7B' and 'Qwen2.5_14B' are specific versions of the Qwen model.
-                Local Path:
-                * You can provide the path to a model that you have downloaded locally.
-                Hugging Face Model Name:
-                * You can also specify the model name from Hugging Face's model hub.
-            is_vl: A flag indicating whether the task involves visual-language processing.
-            **kwargs: Additional keyword arguments that can be passed to the function or method.
-        '''
+        """Args:
+        model_name: Use predefined model names such as 'QwenVL2.5_7B' and 'Qwen2.5_14B',
+            which are specific versions of the Qwen model. Alternatively, you can use the
+            local path to a downloaded model or the model name from Hugging Face."
+          Detailed Breakdown:
+            Predefined Model Names:
+            * 'QwenVL2.5_7B' and 'Qwen2.5_14B' are specific versions of the Qwen model.
+            Local Path:
+            * You can provide the path to a model that you have downloaded locally.
+            Hugging Face Model Name:
+            * You can also specify the model name from Hugging Face's model hub.
+        is_vl: A flag indicating whether the task involves visual-language processing.
+        **kwargs: Additional keyword arguments that can be passed to the function or method.
+
+        """
         if model_name is None:
             model_name = 'Qwen2.5_14B' if not is_vl else 'QwenVL2.5_7B'
         super().__init__(model_name, is_vl, device, **kwargs)
@@ -331,8 +329,11 @@ class QwenPromptExpander(PromptExpander):
 
         if self.is_vl:
             # default: Load the model on the available device(s)
-            from transformers import (AutoProcessor, AutoTokenizer,
-                                      Qwen2_5_VLForConditionalGeneration)
+            from transformers import (
+                AutoProcessor,
+                AutoTokenizer,
+                Qwen2_5_VLForConditionalGeneration,
+            )
             try:
                 from .qwen_vl_utils import process_vision_info
             except:

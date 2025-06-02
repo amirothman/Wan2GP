@@ -1,7 +1,7 @@
 import math
+
 import torch
-import torch.nn as nn
-from einops import rearrange, repeat
+from torch import nn
 
 from ..utils.helpers import to_2tuple
 
@@ -60,8 +60,7 @@ class PatchEmbed(nn.Module):
 
 
 class TextProjection(nn.Module):
-    """
-    Projects text embeddings. Also handles dropout for classifier-free guidance.
+    """Projects text embeddings. Also handles dropout for classifier-free guidance.
 
     Adapted from https://github.com/PixArt-alpha/PixArt-alpha/blob/master/diffusion/model/nets/PixArt_blocks.py
     """
@@ -91,8 +90,7 @@ class TextProjection(nn.Module):
 
 
 def timestep_embedding(t, dim, max_period=10000):
-    """
-    Create sinusoidal timestep embeddings.
+    """Create sinusoidal timestep embeddings.
 
     Args:
         t (torch.Tensor): a 1-D Tensor of N indices, one per batch element. These may be fractional.
@@ -103,6 +101,7 @@ def timestep_embedding(t, dim, max_period=10000):
         embedding (torch.Tensor): An (N, D) Tensor of positional embeddings.
 
     .. ref_link: https://github.com/openai/glide-text2im/blob/main/glide_text2im/nn.py
+
     """
     half = dim // 2
     freqs = torch.exp(
@@ -118,8 +117,7 @@ def timestep_embedding(t, dim, max_period=10000):
 
 
 class TimestepEmbedder(nn.Module):
-    """
-    Embeds scalar timesteps into vector representations.
+    """Embeds scalar timesteps into vector representations.
     """
 
     def __init__(

@@ -1,4 +1,5 @@
-from typing import List, Iterable
+from collections.abc import Iterable
+
 import torch
 import torch.nn.functional as F
 
@@ -49,7 +50,7 @@ def aggregate(prob: torch.Tensor, dim: int) -> torch.Tensor:
         prob = prob.float()
         new_prob = torch.cat([torch.prod(1 - prob, dim=dim, keepdim=True), prob],
                              dim).clamp(1e-7, 1 - 1e-7)
-        logits = torch.log((new_prob / (1 - new_prob)))  # (0, 1) --> (-inf, inf)
+        logits = torch.log(new_prob / (1 - new_prob))  # (0, 1) --> (-inf, inf)
 
         return logits
 

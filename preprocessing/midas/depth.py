@@ -1,12 +1,10 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 
+import cv2
 import numpy as np
 import torch
 from einops import rearrange
 from PIL import Image
-import cv2
-
 
 
 def convert_to_numpy(image):

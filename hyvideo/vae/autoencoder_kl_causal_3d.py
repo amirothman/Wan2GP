@@ -1,12 +1,15 @@
-import os
 import math
-from typing import Dict, Optional, Tuple, Union
+import os
 from dataclasses import dataclass
-from torch import distributed as dist
+from typing import Dict, Optional, Tuple, Union
+
 import loguru
 import torch
-import torch.nn as nn
 import torch.distributed
+from torch import (
+    distributed as dist,
+    nn,
+)
 
 RECOMMENDED_DTYPE = torch.float16
 
@@ -14,7 +17,6 @@ def mpi_comm():
     from mpi4py import MPI
     return MPI.COMM_WORLD
 
-from torch import distributed as dist
 def mpi_rank():
     return dist.get_rank()
 
@@ -75,13 +77,15 @@ class TorchIGather:
 
 
 from diffusers.configuration_utils import ConfigMixin, register_to_config
+
 try:
     # This diffusers is modified and packed in the mirror.
     from diffusers.loaders import FromOriginalVAEMixin
 except ImportError:
     # Use this to be compatible with the original diffusers.
-    from diffusers.loaders.single_file_model import FromOriginalModelMixin as FromOriginalVAEMixin
-from diffusers.utils.accelerate_utils import apply_forward_hook
+    from diffusers.loaders.single_file_model import (
+        FromOriginalModelMixin as FromOriginalVAEMixin,
+    )
 from diffusers.models.attention_processor import (
     ADDED_KV_ATTENTION_PROCESSORS,
     CROSS_ATTENTION_PROCESSORS,
@@ -92,7 +96,15 @@ from diffusers.models.attention_processor import (
 )
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from diffusers.models.modeling_utils import ModelMixin
-from .vae import DecoderCausal3D, BaseOutput, DecoderOutput, DiagonalGaussianDistribution, EncoderCausal3D
+from diffusers.utils.accelerate_utils import apply_forward_hook
+
+from .vae import (
+    BaseOutput,
+    DecoderCausal3D,
+    DecoderOutput,
+    DiagonalGaussianDistribution,
+    EncoderCausal3D,
+)
 
 # """
 # use trt need install polygraphy and onnx-graphsurgeon
@@ -115,13 +127,13 @@ MODEL_BASE = os.environ.get('MODEL_BASE')
 
 
 class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
-    r"""
-    A VAE model with KL loss for encoding images into latents and decoding latent representations into images.
+    r"""A VAE model with KL loss for encoding images into latents and decoding latent representations into images.
 
     This model inherits from [`ModelMixin`]. Check the superclass documentation for it's generic methods implemented
     for all models (such as downloading or saving).
 
-    Parameters:
+    Parameters
+    ----------
         in_channels (int, *optional*, defaults to 3): Number of channels in the input image.
         out_channels (int,  *optional*, defaults to 3): Number of channels in the output.
         down_block_types (`Tuple[str]`, *optional*, defaults to `("DownEncoderBlock2D",)`):
@@ -144,6 +156,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             If enabled it will force the VAE to run in float32 for high image resolution pipelines, such as SD-XL. VAE
             can be fine-tuned / trained to a lower range without loosing too much precision in which case
             `force_upcast` can be set to `False` - see: https://huggingface.co/madebyollin/sdxl-vae-fp16-fix
+
     """
 
     def get_VAE_tile_size(self, vae_config, device_mem_capacity, mixed_precision):
@@ -151,9 +164,9 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             device_mem_capacity /= 1.5
         if vae_config == 0:
             if device_mem_capacity >= 24000:
-                use_vae_config = 1            
+                use_vae_config = 1
             elif device_mem_capacity >= 12000:
-                use_vae_config = 2      
+                use_vae_config = 2
             else:
                 use_vae_config = 3
         else:
@@ -161,13 +174,13 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
         if use_vae_config == 1:
             sample_tsize = 32
-            sample_size = 256  
+            sample_size = 256
         elif use_vae_config == 2:
             sample_tsize = 16
-            sample_size = 256  
+            sample_size = 256
         else:
             sample_tsize = 16
-            sample_size = 192  
+            sample_size = 192
 
         VAE_tiling = {
             "tile_sample_min_tsize" : sample_tsize,
@@ -208,7 +221,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
         self.disable_causal_conv = disable_causal_conv
         self.time_compression_ratio = time_compression_ratio
-        
+
         self.encoder = EncoderCausal3D(
             in_channels=in_channels,
             out_channels=latent_channels,
@@ -270,7 +283,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         self.gather_to_rank0 = self.parallel_decode
 
         self.engine_path = engine_path
-        
+
         self.use_trt_decoder = use_trt_engine
 
     @property
@@ -278,9 +291,8 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         assert self.nccl_gather and self.gather_to_rank0
         if hasattr(self, '_igather'):
             return self._igather
-        else:
-            self._igather = TorchIGather()
-            return self._igather
+        self._igather = TorchIGather()
+        return self._igather
 
     @property
     def use_padding(self):
@@ -296,19 +308,18 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
     def enable_temporal_tiling(self, use_tiling: bool = True):
         self.use_temporal_tiling = use_tiling
-    
+
     def disable_temporal_tiling(self):
         self.enable_temporal_tiling(False)
-    
+
     def enable_spatial_tiling(self, use_tiling: bool = True):
         self.use_spatial_tiling = use_tiling
-    
+
     def disable_spatial_tiling(self):
         self.enable_spatial_tiling(False)
 
     def enable_tiling(self, use_tiling: bool = True):
-        r"""
-        Enable tiled VAE decoding. When this option is enabled, the VAE will split the input tensor into tiles to
+        r"""Enable tiled VAE decoding. When this option is enabled, the VAE will split the input tensor into tiles to
         compute decoding and encoding in several steps. This is useful for saving a large amount of memory and to allow
         processing larger images.
         """
@@ -316,23 +327,20 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         self.enable_temporal_tiling(use_tiling)
 
     def disable_tiling(self):
-        r"""
-        Disable tiled VAE decoding. If `enable_tiling` was previously enabled, this method will go back to computing
+        r"""Disable tiled VAE decoding. If `enable_tiling` was previously enabled, this method will go back to computing
         decoding in one step.
         """
         self.disable_spatial_tiling()
         self.disable_temporal_tiling()
 
     def enable_slicing(self):
-        r"""
-        Enable sliced VAE decoding. When this option is enabled, the VAE will split the input tensor in slices to
+        r"""Enable sliced VAE decoding. When this option is enabled, the VAE will split the input tensor in slices to
         compute decoding in several steps. This is useful to save some memory and allow larger batch sizes.
         """
         self.use_slicing = True
 
     def disable_slicing(self):
-        r"""
-        Disable sliced VAE decoding. If `enable_slicing` was previously enabled, this method will go back to computing
+        r"""Disable sliced VAE decoding. If `enable_slicing` was previously enabled, this method will go back to computing
         decoding in one step.
         """
         self.use_slicing = False
@@ -341,7 +349,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
     def load_trt_decoder(self):
         self.use_trt_decoder = True
         self.engine = EngineFromBytes(BytesFromPath(self.engine_path))
-        
+
         self.trt_decoder_runner = TrtRunner(self.engine)
         self.activate_trt_decoder()
 
@@ -358,10 +366,10 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
     @property
     # Copied from diffusers.models.unet_2d_condition.UNet2DConditionModel.attn_processors
     def attn_processors(self) -> Dict[str, AttentionProcessor]:
-        r"""
-        Returns:
-            `dict` of attention processors: A dictionary containing all attention processors used in the model with
-            indexed by its weight name.
+        r"""Returns:
+        `dict` of attention processors: A dictionary containing all attention processors used in the model with
+        indexed by its weight name.
+
         """
         # set recursively
         processors = {}
@@ -384,10 +392,10 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
     def set_attn_processor(
         self, processor: Union[AttentionProcessor, Dict[str, AttentionProcessor]], _remove_lora=False
     ):
-        r"""
-        Sets the attention processor to use to compute attention.
+        r"""Sets the attention processor to use to compute attention.
 
-        Parameters:
+        Parameters
+        ----------
             processor (`dict` of `AttentionProcessor` or only `AttentionProcessor`):
                 The instantiated processor class or a dictionary of processor classes that will be set as the processor
                 for **all** `Attention` layers.
@@ -419,8 +427,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
     # Copied from diffusers.models.unet_2d_condition.UNet2DConditionModel.set_default_attn_processor
     def set_default_attn_processor(self):
-        """
-        Disables custom attention processors and sets the default attention implementation.
+        """Disables custom attention processors and sets the default attention implementation.
         """
         if all(proc.__class__ in ADDED_KV_ATTENTION_PROCESSORS for proc in self.attn_processors.values()):
             processor = AttnAddedKVProcessor()
@@ -437,8 +444,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
     def encode(
         self, x: torch.FloatTensor, return_dict: bool = True
     ) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
-        """
-        Encode a batch of images into latents.
+        """Encode a batch of images into latents.
 
         Args:
             x (`torch.FloatTensor`): Input batch of images.
@@ -448,15 +454,16 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         Returns:
                 The latent representations of the encoded images. If `return_dict` is True, a
                 [`~models.autoencoder_kl.AutoencoderKLOutput`] is returned, otherwise a plain `tuple` is returned.
+
         """
         assert len(x.shape) == 5, "The input tensor should have 5 dimensions"
 
         if self.use_temporal_tiling and x.shape[2] > self.tile_sample_min_tsize:
             return self.temporal_tiled_encode(x, return_dict=return_dict)
-        
+
         if self.use_spatial_tiling and (x.shape[-1] > self.tile_sample_min_size or x.shape[-2] > self.tile_sample_min_size):
             return self.spatial_tiled_encode(x, return_dict=return_dict)
-                            
+
         if self.use_slicing and x.shape[0] > 1:
             encoded_slices = [self.encoder(x_slice) for x_slice in x.split(1)]
             h = torch.cat(encoded_slices)
@@ -476,10 +483,10 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
         if self.use_temporal_tiling and z.shape[2] > self.tile_latent_min_tsize:
             return self.temporal_tiled_decode(z, return_dict=return_dict)
-        
+
         if self.use_spatial_tiling and (z.shape[-1] > self.tile_latent_min_size or z.shape[-2] > self.tile_latent_min_size):
             return self.spatial_tiled_decode(z, return_dict=return_dict)
-        
+
         if self.use_trt_decoder:
             # For unknown reason, `copy_outputs_to_host` must be set to True
             dec = self.trt_decoder_runner.infer({"input": z.to(RECOMMENDED_DTYPE).contiguous()}, copy_outputs_to_host=True)["output"].to(device=z.device, dtype=z.dtype)
@@ -496,8 +503,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
     def decode(
         self, z: torch.FloatTensor, return_dict: bool = True, generator=None
     ) -> Union[DecoderOutput, torch.FloatTensor]:
-        """
-        Decode a batch of images.
+        """Decode a batch of images.
 
         Args:
             z (`torch.FloatTensor`): Input batch of latent vectors.
@@ -510,7 +516,6 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
                 returned.
 
         """
-
         if self.parallel_decode:
             if z.dtype != RECOMMENDED_DTYPE:
                 loguru.logger.warning(
@@ -596,6 +601,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             [`~models.autoencoder_kl.AutoencoderKLOutput`] or `tuple`:
                 If return_dict is True, a [`~models.autoencoder_kl.AutoencoderKLOutput`] is returned, otherwise a plain
                 `tuple` is returned.
+
         """
         overlap_size = int(self.tile_sample_min_size * (1 - self.tile_overlap_factor))
         blend_extent = int(self.tile_latent_min_size * self.tile_overlap_factor)
@@ -636,8 +642,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
 
     def spatial_tiled_decode(self, z: torch.FloatTensor, return_dict: bool = True) -> Union[DecoderOutput, torch.FloatTensor]:
-        r"""
-        Decode a batch of images using a tiled decoder.
+        r"""Decode a batch of images using a tiled decoder.
 
         Args:
             z (`torch.FloatTensor`): Input batch of latent vectors.
@@ -648,6 +653,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             [`~models.vae.DecoderOutput`] or `tuple`:
                 If return_dict is True, a [`~models.vae.DecoderOutput`] is returned, otherwise a plain `tuple` is
                 returned.
+
         """
         overlap_size = int(self.tile_latent_min_size * (1 - self.tile_overlap_factor))
         blend_extent = int(self.tile_sample_min_size * self.tile_overlap_factor)
@@ -787,7 +793,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
     def temporal_tiled_encode(self, x: torch.FloatTensor, return_dict: bool = True) -> AutoencoderKLOutput:
         assert not self.disable_causal_conv, "Temporal tiling is only compatible with causal convolutions."
-    
+
         B, C, T, H, W = x.shape
         overlap_size = int(self.tile_sample_min_tsize * (1 - self.tile_overlap_factor))
         blend_extent = int(self.tile_latent_min_tsize * self.tile_overlap_factor)
@@ -812,7 +818,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
                 result_row.append(tile[:, :, :t_limit, :, :])
             else:
                 result_row.append(tile[:, :, :t_limit+1, :, :])
-        
+
         moments = torch.cat(result_row, dim=2)
         posterior = DiagonalGaussianDistribution(moments)
 
@@ -820,7 +826,7 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             return (posterior,)
 
         return AutoencoderKLOutput(latent_dist=posterior)
-    
+
     def temporal_tiled_decode(self, z: torch.FloatTensor, return_dict: bool = True) -> Union[DecoderOutput, torch.FloatTensor]:
         # Split z into overlapping tiles and decode them separately.
 
@@ -862,13 +868,13 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         return_posterior: bool = False,
         generator: Optional[torch.Generator] = None,
     ) -> Union[DecoderOutput2, torch.FloatTensor]:
-        r"""
-        Args:
-            sample (`torch.FloatTensor`): Input sample.
-            sample_posterior (`bool`, *optional*, defaults to `False`):
-                Whether to sample from the posterior.
-            return_dict (`bool`, *optional*, defaults to `True`):
-                Whether or not to return a [`DecoderOutput`] instead of a plain tuple.
+        r"""Args:
+        sample (`torch.FloatTensor`): Input sample.
+        sample_posterior (`bool`, *optional*, defaults to `False`):
+            Whether to sample from the posterior.
+        return_dict (`bool`, *optional*, defaults to `True`):
+            Whether or not to return a [`DecoderOutput`] instead of a plain tuple.
+
         """
         x = sample
         posterior = self.encode(x).latent_dist
@@ -881,17 +887,14 @@ class AutoencoderKLCausal3D(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         if not return_dict:
             if return_posterior:
                 return (dec, posterior)
-            else:
-                return (dec,)
+            return (dec,)
         if return_posterior:
             return DecoderOutput2(sample=dec, posterior=posterior)
-        else:
-            return DecoderOutput2(sample=dec)
+        return DecoderOutput2(sample=dec)
 
     # Copied from diffusers.models.unet_2d_condition.UNet2DConditionModel.fuse_qkv_projections
     def fuse_qkv_projections(self):
-        """
-        Enables fused QKV projections. For self-attention modules, all projection matrices (i.e., query,
+        """Enables fused QKV projections. For self-attention modules, all projection matrices (i.e., query,
         key, value) are fused. For cross-attention modules, key and value projection matrices are fused.
 
         <Tip warning={true}>

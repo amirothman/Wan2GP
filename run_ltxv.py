@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""
-Minimal LTX Video Generation Script
+"""Minimal LTX Video Generation Script
 ==================================
 
-A stripped-down script to run LTX Video model directly without CLI/Gradio complexity.
+A stripped-down script to run LTX Video model directly without CLI/Gradio
+complexity.
 Uses the 13B distilled model for fast generation (10 steps vs 30).
 
 Usage:
@@ -13,37 +13,42 @@ Output:
     Generates video at: output/output.mp4
 """
 
+import logging
 import os
+import random
 import sys
 import time
-import random
-import logging
 from pathlib import Path
-from typing import Optional
+
+import imageio
+import numpy as np
+import torch
 import yaml
 
-import torch
-import numpy as np
-import imageio
-from PIL import Image
-from transformers import T5EncoderModel, T5Tokenizer
+# Import mmgp for model loading
+from mmgp import offload
+from transformers import T5Tokenizer
+
+# Import for model downloading
+try:
+    from huggingface_hub import hf_hub_download, snapshot_download
+except ImportError:
+    hf_hub_download = None
+    snapshot_download = None
 
 # Import LTX Video components
 from ltx_video.models.autoencoders.causal_video_autoencoder import (
     CausalVideoAutoencoder,
 )
+from ltx_video.models.autoencoders.latent_upsampler import LatentUpsampler
 from ltx_video.models.transformers.symmetric_patchifier import SymmetricPatchifier
 from ltx_video.models.transformers.transformer3d import Transformer3DModel
 from ltx_video.pipelines.pipeline_ltx_video import (
-    LTXVideoPipeline,
     LTXMultiScalePipeline,
+    LTXVideoPipeline,
 )
 from ltx_video.schedulers.rf import RectifiedFlowScheduler
 from ltx_video.utils.skip_layer_strategy import SkipLayerStrategy
-from ltx_video.models.autoencoders.latent_upsampler import LatentUpsampler
-
-# Import mmgp for model loading
-from mmgp import offload
 
 # ============================================================================
 # HARDCODED CONFIGURATION
@@ -95,7 +100,7 @@ def get_device():
     """Get the best available device."""
     if torch.cuda.is_available():
         return "cuda"
-    elif torch.backends.mps.is_available():
+    if torch.backends.mps.is_available():
         return "mps"
     return "cpu"
 
@@ -111,6 +116,63 @@ def seed_everything(seed: int):
         torch.mps.manual_seed(seed)
 
 
+def download_ltxv_models(logger):
+    """Download required LTXV model files from HuggingFace."""
+    if hf_hub_download is None or snapshot_download is None:
+        logger.error("huggingface_hub is required for automatic model download.")
+        logger.error("Please install it via: pip install huggingface_hub")
+        return False
+
+    logger.info("Downloading LTXV model files...")
+    
+    try:
+        # Create ckpts directory if it doesn't exist
+        os.makedirs("ckpts", exist_ok=True)
+        
+        # Download T5 tokenizer files
+        logger.info("  Downloading T5 tokenizer...")
+        tokenizer_files = [
+            "added_tokens.json",
+            "special_tokens_map.json",
+            "spiece.model",
+            "tokenizer_config.json"
+        ]
+        
+        for file in tokenizer_files:
+            if not os.path.exists(f"ckpts/T5_xxl_1.1/{file}"):
+                hf_hub_download(
+                    repo_id="DeepBeepMeep/LTX_Video",
+                    filename=file,
+                    local_dir="ckpts",
+                    subfolder="T5_xxl_1.1"
+                )
+        
+        # Download main model files
+        logger.info("  Downloading main model files...")
+        main_files = [
+            "ltxv_0.9.7_VAE.safetensors",
+            "ltxv_0.9.7_spatial_upscaler.safetensors",
+            "ltxv_scheduler.json",
+            "ltxv_0.9.7_13B_distilled_bf16.safetensors",
+            "T5_xxl_1.1_enc_bf16.safetensors"
+        ]
+        
+        for file in main_files:
+            if not os.path.exists(f"ckpts/{file}"):
+                hf_hub_download(
+                    repo_id="DeepBeepMeep/LTX_Video",
+                    filename=file,
+                    local_dir="ckpts"
+                )
+        
+        logger.info("✓ All model files downloaded successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to download models: {e}")
+        return False
+
+
 def check_model_files(logger):
     """Check if all required model files exist."""
     missing_files = []
@@ -119,6 +181,18 @@ def check_model_files(logger):
             missing_files.append(f"{name}: {path}")
 
     if missing_files:
+        logger.info("Missing model files detected. Attempting to download...")
+        if download_ltxv_models(logger):
+            # Re-check after download
+            missing_files = []
+            for name, path in MODEL_PATHS.items():
+                if not os.path.exists(path):
+                    missing_files.append(f"{name}: {path}")
+            
+            if not missing_files:
+                logger.info("✓ All model files are now available")
+                return True
+        
         logger.error("Missing model files:")
         for file in missing_files:
             logger.error(f"  - {file}")
@@ -178,7 +252,7 @@ class MinimalLTXV:
     def _load_config(self):
         """Load the distilled model configuration."""
         self.logger.info("Loading pipeline configuration...")
-        with open(MODEL_PATHS["config"], "r") as f:
+        with open(MODEL_PATHS["config"]) as f:
             config = yaml.safe_load(f)
         return config
 
@@ -334,7 +408,7 @@ class MinimalLTXV:
             return images
 
         except Exception as e:
-            self.logger.error(f"Generation failed: {str(e)}")
+            self.logger.error(f"Generation failed: {e!s}")
             raise
 
 
@@ -360,7 +434,7 @@ def save_video(frames, output_path, fps=16, logger=None):
     imageio.mimsave(output_path, frames, fps=fps, quality=8)
 
     if logger:
-        logger.info(f"✓ Video saved successfully")
+        logger.info("✓ Video saved successfully")
         logger.info(f"  Duration: {len(frames) / fps:.1f}s")
         logger.info(f"  Resolution: {frames.shape[2]}x{frames.shape[1]}")
         logger.info(f"  Frames: {len(frames)}")
@@ -419,7 +493,7 @@ def main():
         logger.info("Generation interrupted by user")
         return 1
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"Error: {e!s}")
         logger.error("Check the logs above for more details")
         return 1
 

@@ -1,11 +1,11 @@
 import os
 from pathlib import Path
-from einops import rearrange
 
+import imageio
+import numpy as np
 import torch
 import torchvision
-import numpy as np
-import imageio
+from einops import rearrange
 
 CODE_SUFFIXES = {
     ".py",  # Python codes
@@ -16,14 +16,14 @@ CODE_SUFFIXES = {
 
 
 def safe_dir(path):
-    """
-    Create a directory (or the parent directory of a file) if it does not exist.
+    """Create a directory (or the parent directory of a file) if it does not exist.
 
     Args:
         path (str or Path): Path to the directory.
 
     Returns:
         path (Path): Path object of the directory.
+
     """
     path = Path(path)
     path.mkdir(exist_ok=True, parents=True)
@@ -31,21 +31,21 @@ def safe_dir(path):
 
 
 def safe_file(path):
-    """
-    Create the parent directory of a file if it does not exist.
+    """Create the parent directory of a file if it does not exist.
 
     Args:
         path (str or Path): Path to the file.
 
     Returns:
         path (Path): Path object of the file.
+
     """
     path = Path(path)
     path.parent.mkdir(exist_ok=True, parents=True)
     return path
 
 def save_videos_grid(videos: torch.Tensor, path: str, rescale=False, n_rows=1, fps=24):
-    """save videos by video tensor
+    """Save videos by video tensor
        copy from https://github.com/guoyww/AnimateDiff/blob/e92bd5671ba62c0d774a32951453e328018b7c5b/animatediff/utils/util.py#L61
 
     Args:
@@ -54,6 +54,7 @@ def save_videos_grid(videos: torch.Tensor, path: str, rescale=False, n_rows=1, f
         rescale (bool, optional): rescale the video tensor from [-1, 1] to  . Defaults to False.
         n_rows (int, optional): Defaults to 1.
         fps (int, optional): video save fps. Defaults to 8.
+
     """
     videos = rearrange(videos, "b c t h w -> t b c h w")
     outputs = []

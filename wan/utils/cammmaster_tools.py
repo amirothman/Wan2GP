@@ -1,9 +1,11 @@
-import torch
-from einops import rearrange
-import numpy as np
 import json
 
-class Camera(object):
+import numpy as np
+import torch
+from einops import rearrange
+
+
+class Camera:
     def __init__(self, c2w):
         c2w_mat = np.array(c2w).reshape(4, 4)
         self.c2w_mat = c2w_mat
@@ -32,7 +34,7 @@ def get_relative_pose(cam_params):
         [0, 0, 0, 1]
     ])
     abs2rel = target_cam_c2w @ abs_w2cs[0]
-    ret_poses = [target_cam_c2w, ] + [abs2rel @ abs_c2w for abs_c2w in abs_c2ws[1:]]
+    ret_poses = [target_cam_c2w ] + [abs2rel @ abs_c2w for abs_c2w in abs_c2ws[1:]]
     ret_poses = np.array(ret_poses, dtype=np.float32)
     return ret_poses
 
@@ -41,7 +43,7 @@ def get_camera_embedding(cam_type, num_frames=81):
 
     # load camera
     tgt_camera_path = "wan/camera_extrinsics.json"
-    with open(tgt_camera_path, 'r') as file:
+    with open(tgt_camera_path) as file:
         cam_data = json.load(file)
 
     cam_idx = list(range(num_frames))[::4]

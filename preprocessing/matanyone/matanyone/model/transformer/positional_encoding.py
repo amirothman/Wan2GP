@@ -10,8 +10,7 @@ from torch import nn
 
 
 def get_emb(sin_inp: torch.Tensor) -> torch.Tensor:
-    """
-    Gets a base embedding for one dimension with sin and cos intertwined
+    """Gets a base embedding for one dimension with sin and cos intertwined
     """
     emb = torch.stack((sin_inp.sin(), sin_inp.cos()), dim=-1)
     return torch.flatten(emb, -2, -1)
@@ -39,8 +38,7 @@ class PositionalEncoding(nn.Module):
         self.cached_penc = None  # the cache is irrespective of the number of objects
 
     def forward(self, tensor: torch.Tensor) -> torch.Tensor:
-        """
-        :param tensor: A 4/5d tensor of size 
+        """:param tensor: A 4/5d tensor of size
             channel_last=True: (batch_size, h, w, c) or (batch_size, k, h, w, c)
             channel_last=False: (batch_size, c, h, w) or (batch_size, k, c, h, w)
         :return: positional encoding tensor that has the same shape as the input if the input is 4d
@@ -64,8 +62,7 @@ class PositionalEncoding(nn.Module):
         if self.cached_penc is not None and self.cached_penc.shape == tensor.shape:
             if num_objects is None:
                 return self.cached_penc
-            else:
-                return self.cached_penc.unsqueeze(1)
+            return self.cached_penc.unsqueeze(1)
 
         self.cached_penc = None
 
@@ -93,8 +90,7 @@ class PositionalEncoding(nn.Module):
         self.cached_penc = emb.unsqueeze(0).repeat(batch_size, 1, 1, 1)
         if num_objects is None:
             return self.cached_penc
-        else:
-            return self.cached_penc.unsqueeze(1)
+        return self.cached_penc.unsqueeze(1)
 
 
 if __name__ == '__main__':

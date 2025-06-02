@@ -1,6 +1,7 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
+
 # from ..model.warplayer import warp
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -26,7 +27,7 @@ def warp(tenInput, tenFlow, device):
 def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
     return nn.Sequential(
         nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride,
-                  padding=padding, dilation=dilation, bias=True),        
+                  padding=padding, dilation=dilation, bias=True),
         nn.PReLU(out_planes)
     )
 
@@ -79,13 +80,13 @@ class IFBlock(nn.Module):
         feat = self.convblock0(feat) + feat
         feat = self.convblock1(feat) + feat
         feat = self.convblock2(feat) + feat
-        feat = self.convblock3(feat) + feat        
+        feat = self.convblock3(feat) + feat
         flow = self.conv1(feat)
         mask = self.conv2(feat)
         flow = F.interpolate(flow, scale_factor=scale, mode="bilinear", align_corners=False, recompute_scale_factor=False) * scale
         mask = F.interpolate(mask, scale_factor=scale, mode="bilinear", align_corners=False, recompute_scale_factor=False)
         return flow, mask
-        
+
 class IFNet(nn.Module):
     def __init__(self):
         super(IFNet, self).__init__()
@@ -129,5 +130,5 @@ class IFNet(nn.Module):
         for i in range(3):
             mask_list[i] = torch.sigmoid(mask_list[i])
             merged[i] = merged[i][0] * mask_list[i] + merged[i][1] * (1 - mask_list[i])
-            # merged[i] = torch.clamp(merged[i] + res, 0, 1)        
+            # merged[i] = torch.clamp(merged[i] + res, 0, 1)
         return flow_list, mask_list[2], merged

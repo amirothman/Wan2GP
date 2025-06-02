@@ -1,5 +1,4 @@
 import collections.abc
-
 from itertools import repeat
 
 
@@ -25,8 +24,7 @@ def as_tuple(x):
         return tuple(x)
     if x is None or isinstance(x, (int, float, str)):
         return (x,)
-    else:
-        raise ValueError(f"Unknown type {type(x)}")
+    raise ValueError(f"Unknown type {type(x)}")
 
 
 def as_list_of_2tuple(x):

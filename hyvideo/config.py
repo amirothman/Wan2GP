@@ -1,6 +1,7 @@
 import argparse
-from .constants import *
 import re
+
+from .constants import *
 from .modules.models import HUNYUAN_VIDEO_CONFIG
 
 
@@ -136,8 +137,8 @@ def add_network_args(parser: argparse.ArgumentParser):
     type=str,
     default="",
     help="vae config mode"
-    )    
-    
+    )
+
     parser.add_argument(
         "--share",
         action="store_true",

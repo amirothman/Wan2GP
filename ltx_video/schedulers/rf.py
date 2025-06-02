@@ -1,25 +1,23 @@
+import json
 import math
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple, Union
-import json
-import os
 from pathlib import Path
+from typing import Callable, Optional, Tuple, Union
 
 import torch
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.schedulers.scheduling_utils import SchedulerMixin
 from diffusers.utils import BaseOutput
-from torch import Tensor
 from safetensors import safe_open
-
-
-from ltx_video.utils.torch_utils import append_dims
+from torch import Tensor
 
 from ltx_video.utils.diffusers_config_mapping import (
     diffusers_and_ours_config_mapping,
     make_hashable_key,
 )
+from ltx_video.utils.torch_utils import append_dims
 
 
 def linear_quadratic_schedule(num_steps, threshold_noise=0.025, linear_steps=None):
@@ -83,16 +81,18 @@ def get_normal_shift(
 
 
 def strech_shifts_to_terminal(shifts: Tensor, terminal=0.1):
-    """
-    Stretch a function (given as sampled shifts) so that its final value matches the given terminal value
+    """Stretch a function (given as sampled shifts) so that its final value matches the given terminal value
     using the provided formula.
 
-    Parameters:
+    Parameters
+    ----------
     - shifts (Tensor): The samples of the function to be stretched (PyTorch Tensor).
     - terminal (float): The desired terminal value (value at the last sample).
 
-    Returns:
+    Returns
+    -------
     - Tensor: The stretched shifts such that the final value equals `terminal`.
+
     """
     if shifts.numel() == 0:
         raise ValueError("The 'shifts' tensor must not be empty.")
@@ -114,8 +114,7 @@ def sd3_resolution_dependent_timestep_shift(
     timesteps: Tensor,
     target_shift_terminal: Optional[float] = None,
 ) -> Tensor:
-    """
-    Shifts the timestep schedule as a function of the generated resolution.
+    """Shifts the timestep schedule as a function of the generated resolution.
 
     In the SD3 paper, the authors empirically how to shift the timesteps based on the resolution of the target images.
     For more details: https://arxiv.org/pdf/2403.03206
@@ -132,6 +131,7 @@ def sd3_resolution_dependent_timestep_shift(
 
     Returns:
         Tensor: The shifted timesteps.
+
     """
     if len(samples_shape) == 3:
         _, m, _ = samples_shape
@@ -157,8 +157,7 @@ class TimestepShifter(ABC):
 
 @dataclass
 class RectifiedFlowSchedulerOutput(BaseOutput):
-    """
-    Output class for the scheduler's step function output.
+    """Output class for the scheduler's step function output.
 
     Args:
         prev_sample (`torch.FloatTensor` of shape `(batch_size, num_channels, height, width)` for images):
@@ -167,6 +166,7 @@ class RectifiedFlowSchedulerOutput(BaseOutput):
         pred_original_sample (`torch.FloatTensor` of shape `(batch_size, num_channels, height, width)` for images):
             The predicted denoised sample (x_{0}) based on the model output from the current timestep.
             `pred_original_sample` can be used to preview progress or for guidance.
+
     """
 
     prev_sample: torch.FloatTensor
@@ -203,9 +203,9 @@ class RectifiedFlowScheduler(SchedulerMixin, ConfigMixin, TimestepShifter):
     ) -> Tensor:
         if self.sampler == "Uniform":
             return torch.linspace(1, 1 / num_timesteps, num_timesteps)
-        elif self.sampler == "LinearQuadratic":
+        if self.sampler == "LinearQuadratic":
             return linear_quadratic_schedule(num_timesteps)
-        elif self.sampler == "Constant":
+        if self.sampler == "Constant":
             assert (
                 shift is not None
             ), "Shift must be provided for constant time shift sampler."
@@ -218,7 +218,7 @@ class RectifiedFlowScheduler(SchedulerMixin, ConfigMixin, TimestepShifter):
             return sd3_resolution_dependent_timestep_shift(
                 samples_shape, timesteps, self.target_shift_terminal
             )
-        elif self.shifting == "SimpleDiffusion":
+        if self.shifting == "SimpleDiffusion":
             return simple_diffusion_resolution_dependent_timestep_shift(
                 samples_shape, timesteps, self.base_resolution
             )
@@ -231,8 +231,7 @@ class RectifiedFlowScheduler(SchedulerMixin, ConfigMixin, TimestepShifter):
         timesteps: Optional[Tensor] = None,
         device: Union[str, torch.device] = None,
     ):
-        """
-        Sets the discrete timesteps used for the diffusion chain. Supporting function to be run before inference.
+        """Sets the discrete timesteps used for the diffusion chain. Supporting function to be run before inference.
         If `timesteps` are provided, they will be used instead of the scheduled timesteps.
 
         Args:
@@ -240,6 +239,7 @@ class RectifiedFlowScheduler(SchedulerMixin, ConfigMixin, TimestepShifter):
             samples_shape (`torch.Size` *optional*): The samples batch shape, used for shifting.
             timesteps ('torch.Tensor' *optional*): Specific timesteps to use instead of scheduled timesteps.
             device (`Union[str, torch.device]`, *optional*): The device to which the timesteps tensor will be moved.
+
         """
         if timesteps is not None and num_inference_steps is not None:
             raise ValueError(
@@ -262,7 +262,7 @@ class RectifiedFlowScheduler(SchedulerMixin, ConfigMixin, TimestepShifter):
 
     @staticmethod
     def from_pretrained(pretrained_model_path: Union[str, os.PathLike]):
-        with open(pretrained_model_path, "r", encoding="utf-8") as reader:
+        with open(pretrained_model_path, encoding="utf-8") as reader:
             text = reader.read()
 
         config = json.loads(text)
@@ -278,13 +278,13 @@ class RectifiedFlowScheduler(SchedulerMixin, ConfigMixin, TimestepShifter):
             configs = json.loads(metadata["config"])
             config = configs["scheduler"]
             del comfy_single_file_state_dict
-  
+
         elif pretrained_model_path.is_dir():
             diffusers_noise_scheduler_config_path = (
                 pretrained_model_path / "scheduler" / "scheduler_config.json"
             )
 
-            with open(diffusers_noise_scheduler_config_path, "r") as f:
+            with open(diffusers_noise_scheduler_config_path) as f:
                 scheduler_config = json.load(f)
             hashable_config = make_hashable_key(scheduler_config)
             if hashable_config in diffusers_and_ours_config_mapping:
@@ -295,8 +295,7 @@ class RectifiedFlowScheduler(SchedulerMixin, ConfigMixin, TimestepShifter):
         self, sample: torch.FloatTensor, timestep: Optional[int] = None
     ) -> torch.FloatTensor:
         # pylint: disable=unused-argument
-        """
-        Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
+        """Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
         current timestep.
 
         Args:
@@ -305,6 +304,7 @@ class RectifiedFlowScheduler(SchedulerMixin, ConfigMixin, TimestepShifter):
 
         Returns:
             `torch.FloatTensor`: scaled input sample
+
         """
         return sample
 
@@ -317,8 +317,7 @@ class RectifiedFlowScheduler(SchedulerMixin, ConfigMixin, TimestepShifter):
         stochastic_sampling: Optional[bool] = False,
         **kwargs,
     ) -> Union[RectifiedFlowSchedulerOutput, Tuple]:
-        """
-        Predict the sample from the previous timestep by reversing the SDE. This function propagates the diffusion
+        r"""Predict the sample from the previous timestep by reversing the SDE. This function propagates the diffusion
         process from the learned model outputs (most often the predicted noise).
         z_{t_1} = z_t - \Delta_t * v
         The method finds the next timestep that is lower than the input timestep(s) and denoises the latents
@@ -340,6 +339,7 @@ class RectifiedFlowScheduler(SchedulerMixin, ConfigMixin, TimestepShifter):
             [`~schedulers.scheduling_utils.RectifiedFlowSchedulerOutput`] or `tuple`:
                 If return_dict is `True`, [`~schedulers.rf_scheduler.RectifiedFlowSchedulerOutput`] is returned,
                 otherwise a tuple is returned where the first element is the sample tensor.
+
         """
         if self.num_inference_steps is None:
             raise ValueError(

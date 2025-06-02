@@ -4,38 +4,37 @@ import logging
 import math
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as T
+from torch import nn
 
 from .attention import pay_attention
 from .tokenizers import HuggingfaceTokenizer
 from .xlm_roberta import XLMRoberta
 
 __all__ = [
+    'CLIPModel',
     'XLMRobertaCLIP',
     'clip_xlm_roberta_vit_h_14',
-    'CLIPModel',
 ]
 
 
 def pos_interpolate(pos, seq_len):
     if pos.size(1) == seq_len:
         return pos
-    else:
-        src_grid = int(math.sqrt(pos.size(1)))
-        tar_grid = int(math.sqrt(seq_len))
-        n = pos.size(1) - src_grid * src_grid
-        return torch.cat([
-            pos[:, :n],
-            F.interpolate(
-                pos[:, n:].float().reshape(1, src_grid, src_grid, -1).permute(
-                    0, 3, 1, 2),
-                size=(tar_grid, tar_grid),
-                mode='bicubic',
-                align_corners=False).flatten(2).transpose(1, 2)
-        ],
-                         dim=1)
+    src_grid = int(math.sqrt(pos.size(1)))
+    tar_grid = int(math.sqrt(seq_len))
+    n = pos.size(1) - src_grid * src_grid
+    return torch.cat([
+        pos[:, :n],
+        F.interpolate(
+            pos[:, n:].float().reshape(1, src_grid, src_grid, -1).permute(
+                0, 3, 1, 2),
+            size=(tar_grid, tar_grid),
+            mode='bicubic',
+            align_corners=False).flatten(2).transpose(1, 2)
+    ],
+                     dim=1)
 
 
 class QuickGELU(nn.Module):
@@ -72,8 +71,7 @@ class SelfAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
 
     def forward(self, x):
-        """
-        x:   [B, L, C].
+        """x:   [B, L, C].
         """
         b, s, c, n, d = *x.size(), self.num_heads, self.head_dim
 
@@ -184,8 +182,7 @@ class AttentionPool(nn.Module):
             nn.Linear(int(dim * mlp_ratio), dim), nn.Dropout(proj_dropout))
 
     def forward(self, x):
-        """
-        x:  [B, L, C].
+        """x:  [B, L, C].
         """
         b, s, c, n, d = *x.size(), self.num_heads, self.head_dim
 
@@ -295,9 +292,8 @@ class VisionTransformer(nn.Module):
         if use_31_block:
             x = self.transformer[:-1](x)
             return x
-        else:
-            x = self.transformer(x)
-            return x
+        x = self.transformer(x)
+        return x
 
 
 class XLMRobertaWithHead(XLMRoberta):
@@ -404,8 +400,7 @@ class XLMRobertaCLIP(nn.Module):
         self.log_scale = nn.Parameter(math.log(1 / 0.07) * torch.ones([]))
 
     def forward(self, imgs, txt_ids):
-        """
-        imgs:       [B, 3, H, W] of torch.float32.
+        """imgs:       [B, 3, H, W] of torch.float32.
         - mean:     [0.48145466, 0.4578275, 0.40821073]
         - std:      [0.26862954, 0.26130258, 0.27577711]
         txt_ids:    [B, L] of torch.long.

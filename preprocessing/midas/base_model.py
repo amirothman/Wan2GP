@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 import torch
 
@@ -9,6 +8,7 @@ class BaseModel(torch.nn.Module):
 
         Args:
             path (str): file path
+
         """
         parameters = torch.load(path, map_location=torch.device('cpu'), weights_only=True)
 

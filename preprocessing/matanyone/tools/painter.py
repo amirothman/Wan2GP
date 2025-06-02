@@ -1,10 +1,8 @@
 # paint masks, contours, or points on images, with specified colors
+
 import cv2
-import torch
 import numpy as np
 from PIL import Image
-import copy
-import time
 
 
 def colormap(rgb=True):
@@ -157,8 +155,7 @@ def mask_painter(input_image, input_mask, mask_color=5, mask_alpha=0.7, contour_
 	return painted_image
 
 def background_remover(input_image, input_mask):
-	"""
-	input_image: H, W, 3, np.array
+	"""input_image: H, W, 3, np.array
 	input_mask: H, W, np.array
 
 	image_wo_background: PIL.Image	

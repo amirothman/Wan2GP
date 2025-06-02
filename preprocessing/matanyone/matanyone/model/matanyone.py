@@ -1,18 +1,26 @@
-from typing import List, Dict, Iterable
 import logging
-from omegaconf import DictConfig
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from omegaconf import OmegaConf
-from huggingface_hub import PyTorchModelHubMixin
+from collections.abc import Iterable
+from typing import Dict, List
 
-from .big_modules import PixelEncoder, UncertPred, KeyProjection, MaskEncoder, PixelFeatureFuser, MaskDecoder
-from .aux_modules import AuxComputer
-from .utils.memory_utils import get_affinity, readout
-from .transformer.object_transformer import QueryTransformer
-from .transformer.object_summarizer import ObjectSummarizer
+import torch
+import torch.nn.functional as F
+from huggingface_hub import PyTorchModelHubMixin
+from omegaconf import DictConfig, OmegaConf
+from torch import nn
+
 from ...utils.tensor_utils import aggregate
+from .aux_modules import AuxComputer
+from .big_modules import (
+    KeyProjection,
+    MaskDecoder,
+    MaskEncoder,
+    PixelEncoder,
+    PixelFeatureFuser,
+    UncertPred,
+)
+from .transformer.object_summarizer import ObjectSummarizer
+from .transformer.object_transformer import QueryTransformer
+from .utils.memory_utils import get_affinity, readout
 
 log = logging.getLogger()
 class MatAnyone(nn.Module,
@@ -125,8 +133,7 @@ class MatAnyone(nn.Module,
                     sensory: torch.Tensor, last_mask: torch.Tensor,
                     selector: torch.Tensor, uncert_output=None, seg_pass=False,
                     last_pix_feat=None, last_pred_mask=None) -> (torch.Tensor, Dict[str, torch.Tensor]):
-        """
-        query_key       : B * CK * H * W
+        """query_key       : B * CK * H * W
         query_selection : B * CK * H * W
         memory_key      : B * CK * T * H * W
         memory_shrinkage: B * 1  * T * H * W
@@ -149,11 +156,11 @@ class MatAnyone(nn.Module,
             pixel_readout = readout(affinity, msk_value, uncert_mask)
             pixel_readout = pixel_readout.view(batch_size, num_objects, self.value_dim,
                                             *pixel_readout.shape[-2:])
-            
+
             uncert_output = self.pred_uncertainty(last_pix_feat, pix_feat, last_pred_mask, pixel_readout[:,0]-msk_value[:,:,-1])
             uncert_prob = uncert_output["prob"].unsqueeze(1) # b n 1 h w
             pixel_readout = pixel_readout*uncert_prob + msk_value[:,:,-1].unsqueeze(1)*(1-uncert_prob)
-                
+
         pixel_readout = self.pixel_fusion(pix_feat, pixel_readout, sensory, last_mask)
 
 
@@ -167,13 +174,12 @@ class MatAnyone(nn.Module,
         }
 
         return mem_readout, aux_output, uncert_output
-    
+
     def read_first_frame_memory(self, pixel_readout,
                     obj_memory: torch.Tensor, pix_feat: torch.Tensor,
                     sensory: torch.Tensor, last_mask: torch.Tensor,
                     selector: torch.Tensor, seg_pass=False) -> (torch.Tensor, Dict[str, torch.Tensor]):
-        """
-        query_key       : B * CK * H * W
+        """query_key       : B * CK * H * W
         query_selection : B * CK * H * W
         memory_key      : B * CK * T * H * W
         memory_shrinkage: B * 1  * T * H * W
@@ -181,7 +187,6 @@ class MatAnyone(nn.Module,
         obj_memory      : B * num_objects * T * num_summaries * C
         pixel_feature   : B * C * H * W
         """
-                
         pixel_readout = self.pixel_fusion(pix_feat, pixel_readout, sensory, last_mask)
 
         # read from query transformer
@@ -238,8 +243,7 @@ class MatAnyone(nn.Module,
                 last_mask=None,
                 sigmoid_residual=False,
                 seg_mat=False) -> (torch.Tensor, torch.Tensor, torch.Tensor):
-        """
-        multi_scale_features is from the key encoder for skip-connection
+        """multi_scale_features is from the key encoder for skip-connection
         memory_readout is from working/long-term memory
         sensory is the sensory memory
         last_mask is the mask from the last frame, supplementing sensory memory
@@ -272,7 +276,7 @@ class MatAnyone(nn.Module,
                 logits = logits.clamp(0.0, 1.0)
             logits = torch.cat([torch.prod(1 - logits, dim=1, keepdim=True), logits], 1)
             prob = logits
-        
+
         return sensory, logits, prob
 
     def compute_aux(self, pix_feat: torch.Tensor, aux_inputs: Dict[str, torch.Tensor],
@@ -325,7 +329,7 @@ class MatAnyone(nn.Module,
         for k in self.state_dict():
             if k not in src_dict:
                 log.info(f'Key {k} found in self.state_dict() but not in src_dict!!!')
-                
+
         self.load_state_dict(src_dict, strict=False)
 
     @property

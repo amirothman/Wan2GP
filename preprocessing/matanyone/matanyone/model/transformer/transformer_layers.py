@@ -1,11 +1,11 @@
 # Modified from PyTorch nn.Transformer
 
-from typing import List, Callable
+from typing import Callable, List
 
 import torch
-from torch import Tensor
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor, nn
+
 from ...model.channel_attn import CAResBlock
 
 
@@ -94,8 +94,7 @@ class CrossAttention(nn.Module):
 
         if self.residual:
             return r + self.dropout(x), weights
-        else:
-            return self.dropout(x), weights
+        return self.dropout(x), weights
 
 
 class FFN(nn.Module):
@@ -155,7 +154,7 @@ class OutputFFN(nn.Module):
 def _get_activation_fn(activation: str) -> Callable[[Tensor], Tensor]:
     if activation == "relu":
         return F.relu
-    elif activation == "gelu":
+    if activation == "gelu":
         return F.gelu
 
-    raise RuntimeError("activation should be relu/gelu, not {}".format(activation))
+    raise RuntimeError(f"activation should be relu/gelu, not {activation}")

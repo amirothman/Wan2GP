@@ -17,47 +17,43 @@
 #
 # ==============================================================================
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Union, Tuple
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 import torch
 import torch.distributed as dist
-import numpy as np
-from dataclasses import dataclass
-from packaging import version
-
 from diffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
 from diffusers.configuration_utils import FrozenDict
 from diffusers.image_processor import VaeImageProcessor
-from diffusers.utils import BaseOutput
 from diffusers.loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from diffusers.models import AutoencoderKL
 from diffusers.models.lora import adjust_lora_scale_text_encoder
+from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.schedulers import KarrasDiffusionSchedulers
 from diffusers.utils import (
     USE_PEFT_BACKEND,
+    BaseOutput,
     deprecate,
-    logging,
     replace_example_docstring,
     scale_lora_layers,
     unscale_lora_layers,
 )
 from diffusers.utils.torch_utils import randn_tensor
-from diffusers.pipelines.pipeline_utils import DiffusionPipeline
-from diffusers.utils import BaseOutput
+from einops import rearrange
+from mmgp import offload
 
 from ...constants import PRECISION_TO_TYPE
-from ...vae.autoencoder_kl_causal_3d import AutoencoderKLCausal3D
-from ...text_encoder import TextEncoder
 from ...modules import HYVideoDiffusionTransformer
-from mmgp import offload
+from ...text_encoder import TextEncoder
 from ...utils.data_utils import black_image
-from einops import rearrange
+from ...vae.autoencoder_kl_causal_3d import AutoencoderKLCausal3D
 
 EXAMPLE_DOC_STRING = """"""
 
 
 def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
-    """
-    Rescale `noise_cfg` according to `guidance_rescale`. Based on findings of [Common Diffusion Noise Schedules and
+    """Rescale `noise_cfg` according to `guidance_rescale`. Based on findings of [Common Diffusion Noise Schedules and
     Sample Steps are Flawed](https://arxiv.org/pdf/2305.08891.pdf). See Section 3.4
     """
     std_text = noise_pred_text.std(
@@ -81,8 +77,7 @@ def retrieve_timesteps(
     sigmas: Optional[List[float]] = None,
     **kwargs,
 ):
-    """
-    Calls the scheduler's `set_timesteps` method and retrieves timesteps from the scheduler after the call. Handles
+    """Calls the scheduler's `set_timesteps` method and retrieves timesteps from the scheduler after the call. Handles
     custom timesteps. Any kwargs will be supplied to `scheduler.set_timesteps`.
 
     Args:
@@ -103,6 +98,7 @@ def retrieve_timesteps(
     Returns:
         `Tuple[torch.Tensor, int]`: A tuple where the first element is the timestep schedule from the scheduler and the
         second element is the number of inference steps.
+
     """
     if timesteps is not None and sigmas is not None:
         raise ValueError(
@@ -144,8 +140,7 @@ class HunyuanVideoPipelineOutput(BaseOutput):
 
 
 class HunyuanVideoPipeline(DiffusionPipeline):
-    r"""
-    Pipeline for text-to-video generation using HunyuanVideo.
+    r"""Pipeline for text-to-video generation using HunyuanVideo.
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
     implemented for all pipelines (downloading, saving, running on a particular device, etc.).
@@ -161,6 +156,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
             A `HYVideoDiffusionTransformer` to denoise the encoded video latents.
         scheduler ([`SchedulerMixin`]):
             A scheduler to be used in combination with `unet` to denoise the encoded image latents.
+
     """
 
     model_cpu_offload_seq = "text_encoder->text_encoder_2->transformer->vae"
@@ -247,7 +243,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         do_classifier_free_guidance,
         negative_prompt=None,
         pixel_value_llava: Optional[torch.Tensor] = None,
-        uncond_pixel_value_llava: Optional[torch.Tensor] = None,                
+        uncond_pixel_value_llava: Optional[torch.Tensor] = None,
         prompt_embeds: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         negative_prompt_embeds: Optional[torch.Tensor] = None,
@@ -258,8 +254,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         data_type: Optional[str] = "image",
         semantic_images=None
     ):
-        r"""
-        Encodes the prompt into text encoder hidden states.
+        r"""Encodes the prompt into text encoder hidden states.
 
         Args:
             prompt (`str` or `List[str]`, *optional*):
@@ -295,6 +290,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 the output of the pre-final layer will be used for computing the prompt embeddings.
             text_encoder (TextEncoder, *optional*):
             data_type (`str`, *optional*):
+
         """
         if text_encoder is None:
             text_encoder = self.text_encoder
@@ -418,7 +414,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 uncond_image = [black_image(img.size[0], img.size[1]) for img in semantic_images]
             else:
                 uncond_image = None
-            
+
             if uncond_pixel_value_llava is not None:
                 uncond_input['pixel_value_llava'] = uncond_pixel_value_llava
                 uncond_input['attention_mask'] = torch.cat([uncond_input['attention_mask'], torch.ones((1, 575 * len(uncond_pixel_value_llava))).to(uncond_input['attention_mask'])], dim=1)
@@ -557,11 +553,11 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
                 " only forward one of the two."
             )
-        elif prompt is None and prompt_embeds is None:
+        if prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (
+        if prompt is not None and (
             not isinstance(prompt, str) and not isinstance(prompt, list)
         ):
             raise ValueError(
@@ -574,7 +570,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 f" {negative_prompt_embeds}. Please make sure to only forward one of the two."
             )
 
-        
+
         if pixel_value_llava is not None and uncond_pixel_value_llava is not None:
             if len(pixel_value_llava) != len(uncond_pixel_value_llava):
                 raise ValueError(
@@ -582,7 +578,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                     f" got: `pixel_value_llava` {len(pixel_value_llava)} != `uncond_pixel_value_llava`"
                     f" {len(uncond_pixel_value_llava)}."
                 )
-            
+
         if prompt_embeds is not None and negative_prompt_embeds is not None:
             if prompt_embeds.shape != negative_prompt_embeds.shape:
                 raise ValueError(
@@ -607,7 +603,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         self,
         batch_size,
         num_channels_latents,
-        num_inference_steps,        
+        num_inference_steps,
         height,
         width,
         video_length,
@@ -653,7 +649,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                     shape, generator=generator, device=device, dtype=dtype
                 )
             else:
-                latents = latents.to(device)   
+                latents = latents.to(device)
             original_latents = None
             noise = None
             timesteps = timesteps
@@ -662,14 +658,14 @@ class HunyuanVideoPipeline(DiffusionPipeline):
             timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, denoise_strength, device)
 
             if latents is None:
-                latents = noise 
+                latents = noise
                 original_latents = None
             else:
                 latents = latents.to(device)
                 latent_timestep = timesteps[:1]
                 frames_needed = noise.shape[2]
                 current_frames = latents.shape[2]
-                
+
                 if frames_needed > current_frames:
                     repeat_factor = frames_needed - current_frames
                     additional_frame = torch.randn((latents.size(0), latents.size(1),repeat_factor, latents.size(3), latents.size(4)), dtype=latents.dtype, device=latents.device)
@@ -677,11 +673,11 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                     self.additional_frames = repeat_factor
                 elif frames_needed < current_frames:
                     latents = latents[:, :, :frames_needed, :, :]
-                
+
                 original_latents = latents.clone()
                 latents = latents * (1 - latent_timestep / 1000) + latent_timestep / 1000 * noise
                 print(f'debug:latent_timestep={latent_timestep}, latents-size={latents.shape}')
-       
+
         # Check existence to make it compatible with FlowMatchEulerDiscreteScheduler
         if hasattr(self.scheduler, "init_noise_sigma"):
             # scale the initial noise by the standard deviation required by the scheduler
@@ -695,8 +691,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         embedding_dim: int = 512,
         dtype: torch.dtype = torch.float32,
     ) -> torch.Tensor:
-        """
-        See https://github.com/google-research/vdm/blob/dc27b98a554f65cdc654b800da5aa1846545d41b/model_vdm.py#L298
+        """See https://github.com/google-research/vdm/blob/dc27b98a554f65cdc654b800da5aa1846545d41b/model_vdm.py#L298
 
         Args:
             w (`torch.Tensor`):
@@ -708,6 +703,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
 
         Returns:
             `torch.Tensor`: Embedding vectors with shape `(len(w), embedding_dim)`.
+
         """
         assert len(w.shape) == 1
         w = w * 1000.0
@@ -762,7 +758,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         height: int,
         width: int,
         video_length: int,
-        name: Union[str, List[str]] = None,        
+        name: Union[str, List[str]] = None,
         data_type: str = "video",
         num_inference_steps: int = 50,
         timesteps: List[int] = None,
@@ -803,7 +799,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         n_tokens: Optional[int] = None,
         video_val_flag: bool=False,
         denoise_strength: float = 1.0,
-        mask = None,        
+        mask = None,
         embedded_guidance_scale: Optional[float] = None,
         i2v_mode: bool = False,
         i2v_condition_type: str = None,
@@ -815,8 +811,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         callback = None,
         **kwargs,
     ):
-        r"""
-        The call function to the pipeline for generation.
+        r"""The call function to the pipeline for generation.
 
         Args:
             prompt (`str` or `List[str]`):
@@ -906,6 +901,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 otherwise a `tuple` is returned where the first element is a list with the generated images and the
                 second element is a list of `bool`s indicating whether the corresponding generated image contains
                 "not-safe-for-work" (nsfw) content.
+
         """
         callback_steps = kwargs.pop("callback_steps", None)
 
@@ -957,7 +953,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
             callback_steps,
             negative_prompt,
             pixel_value_llava,
-            uncond_pixel_value_llava,            
+            uncond_pixel_value_llava,
             prompt_embeds,
             negative_prompt_embeds,
             callback_on_step_end_tensor_inputs,
@@ -994,13 +990,13 @@ class HunyuanVideoPipeline(DiffusionPipeline):
             negative_prompt_mask,
         ) = self.encode_prompt(
             prompt,
-            name,            
+            name,
             device,
             num_videos_per_prompt,
             self.do_classifier_free_guidance,
             negative_prompt,
             pixel_value_llava=pixel_value_llava,
-            uncond_pixel_value_llava=uncond_pixel_value_llava,            
+            uncond_pixel_value_llava=uncond_pixel_value_llava,
             prompt_embeds=prompt_embeds,
             attention_mask=attention_mask,
             negative_prompt_embeds=negative_prompt_embeds,
@@ -1054,7 +1050,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
             if ref_latents is not None:
                 ref_latents = torch.cat([ref_latents, ref_latents], dim=0)
                 if prompt_mask[0].sum() > 575:
-                    prompt_mask[0] = torch.cat([torch.ones((1, prompt_mask[0].sum() - 575)).to(prompt_mask), 
+                    prompt_mask[0] = torch.cat([torch.ones((1, prompt_mask[0].sum() - 575)).to(prompt_mask),
                                                 torch.zeros((1, prompt_mask.shape[1] - prompt_mask[0].sum() + 575)).to(prompt_mask)], dim=1)
 
         if ip_cfg_scale>0:
@@ -1099,16 +1095,16 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         latents, original_latents, noise, timesteps = self.prepare_latents(
             batch_size * num_videos_per_prompt,
             num_channels_latents,
-            num_inference_steps,            
+            num_inference_steps,
             height,
             width,
             video_length,
             latent_dtype, #prompt_embeds.dtype,
             device,
-            timesteps,            
+            timesteps,
             generator,
             latents,
-            denoise_strength,            
+            denoise_strength,
             img_latents=img_latents,
             i2v_mode=i2v_mode,
             i2v_condition_type=i2v_condition_type,
@@ -1137,7 +1133,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
 
         vae_precision = "fp16" # torch.float16
         precision = "bf16" # torch.bfloat16
-            
+
         disable_autocast =  True
 
         target_dtype = PRECISION_TO_TYPE[precision]
@@ -1170,7 +1166,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
             mask = mask[...,0:1]
             mask = mask.unsqueeze(0)
             mask = rearrange(mask, "b t h w c -> b c t h w")
-            
+
             mask_latents = torch.nn.functional.interpolate(mask, size=(mask_length, mask_height, mask_width))
             mask_latents = mask_latents.to(device)
 
@@ -1215,8 +1211,8 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 else:
                     latent_model_input = latents
 
-                latent_model_input =  torch.cat([latent_model_input] * latent_items) if latent_items > 1 else latent_model_input                     
- 
+                latent_model_input =  torch.cat([latent_model_input] * latent_items) if latent_items > 1 else latent_model_input
+
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t
                 )
@@ -1242,12 +1238,12 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                     if embedded_guidance_scale is not None
                     else None
                 )
- 
+
                 # predict the noise residual
                 with torch.autocast(
                     device_type="cuda", dtype=target_dtype, enabled=autocast_enabled
                 ):
-                    
+
                     if self.do_classifier_free_guidance and multi_passes_free_guidance:
                         for j in range(len(latent_model_input)):
                             ret = self.transformer(  # For an input image (129, 192, 336) (1, 256, 256)
@@ -1305,7 +1301,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 # perform guidance
                 if self.do_classifier_free_guidance:
                     if cfg_star_rescale:
-                        batch_size = 1 
+                        batch_size = 1
                         positive_flat = noise_pred_text.view(batch_size, -1)
                         negative_flat = noise_pred_uncond.view(batch_size, -1)
                         dot_product = torch.sum(
@@ -1314,7 +1310,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                         squared_norm = torch.sum(negative_flat**2, dim=1, keepdim=True) + 1e-8
                         positive_flat, negative_flat = None, None
                         alpha = dot_product / squared_norm
-                        noise_pred_uncond *= alpha 
+                        noise_pred_uncond *= alpha
 
                     if ip_cfg_scale > 0:
                         noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond) + start_scale * (noise_pred_ip-noise_pred_text)
@@ -1324,10 +1320,10 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                     else:
                         noise_pred = noise_pred_uncond + self.guidance_scale * ( noise_pred_text - noise_pred_uncond)
 
-                        
+
                     if self.do_classifier_free_guidance and self.guidance_rescale > 0.0:
                         # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
-                        noise_pred = rescale_noise_cfg( noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale, )
+                        noise_pred = rescale_noise_cfg( noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale )
 
                 # compute the previous noisy sample x_t -> x_t-1
                 if i2v_mode and i2v_condition_type == "token_replace":
@@ -1347,11 +1343,11 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 noise_pred_uncond, noise_pred_text, noise_pred, noise_pred_ip, ret = None, None, None, None, None
 
                 if callback is not None:
-                    callback(i, latents.squeeze(0), False)         
+                    callback(i, latents.squeeze(0), False)
 
         if self.interrupt:
             return [None]
-        
+
         # if load_latent:
         #     latents = torch.load("latent.pt")
         # else:

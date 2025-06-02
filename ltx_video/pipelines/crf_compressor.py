@@ -1,7 +1,8 @@
-import av
-import torch
 import io
+
+import av
 import numpy as np
+import torch
 
 
 def _encode_single_frame(output_file, image_array: np.ndarray, crf):

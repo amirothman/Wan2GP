@@ -3,23 +3,20 @@ import argparse
 import binascii
 import os
 import os.path as osp
-import torchvision.transforms.functional as TF
-import torch.nn.functional as F
-
-import imageio
-import torch
-import decord
-import torchvision
-from PIL import Image
-import numpy as np
-from rembg import remove, new_session
 import random
 
-__all__ = ['cache_video', 'cache_image', 'str2bool']
-
-
-
+import decord
+import imageio
+import numpy as np
+import torch
+import torchvision
 from PIL import Image
+from rembg import new_session, remove
+
+__all__ = ['cache_image', 'cache_video', 'str2bool']
+
+
+
 
 def seed_everything(seed: int):
     random.seed(seed)
@@ -29,18 +26,17 @@ def seed_everything(seed: int):
         torch.cuda.manual_seed(seed)
     if torch.backends.mps.is_available():
         torch.mps.manual_seed(seed)
-        
+
 def resample(video_fps, video_frames_count, max_target_frames_count, target_fps, start_target_frame ):
     import math
 
-    if video_fps < target_fps :
-        video_fps = target_fps
+    video_fps = max(video_fps, target_fps)
 
     video_frame_duration = 1 /video_fps
-    target_frame_duration = 1 / target_fps 
-    
+    target_frame_duration = 1 / target_fps
+
     target_time = start_target_frame * target_frame_duration
-    frame_no = math.ceil(target_time / video_frame_duration)  
+    frame_no = math.ceil(target_time / video_frame_duration)
     cur_time = frame_no * video_frame_duration
     frame_ids =[]
     while True:
@@ -48,7 +44,7 @@ def resample(video_fps, video_frames_count, max_target_frames_count, target_fps,
             break
         add_frames_count = math.ceil( (target_time -cur_time) / video_frame_duration )
         frame_no += add_frames_count
-        if frame_no >= video_frames_count:             
+        if frame_no >= video_frames_count:
             break
         frame_ids.append(frame_no)
         cur_time += add_frames_count * video_frame_duration
@@ -66,13 +62,13 @@ def get_video_frame(file_name, frame_no):
 
 def resize_lanczos(img, h, w):
     img = Image.fromarray(np.clip(255. * img.movedim(0, -1).cpu().numpy(), 0, 255).astype(np.uint8))
-    img = img.resize((w,h), resample=Image.Resampling.LANCZOS) 
+    img = img.resize((w,h), resample=Image.Resampling.LANCZOS)
     return torch.from_numpy(np.array(img).astype(np.float32) / 255.0).movedim(-1, 0)
 
 
 def remove_background(img, session=None):
     if session ==None:
-        session = new_session() 
+        session = new_session()
     img = Image.fromarray(np.clip(255. * img.movedim(0, -1).cpu().numpy(), 0, 255).astype(np.uint8))
     img = remove(img, session=session, alpha_matting = True, bgcolor=[255, 255, 255, 0]).convert('RGB')
     return torch.from_numpy(np.array(img).astype(np.float32) / 255.0).movedim(-1, 0)
@@ -82,7 +78,7 @@ def calculate_new_dimensions(canvas_height, canvas_width, height, width, fit_int
     if fit_into_canvas:
         scale1  = min(canvas_height / height, canvas_width / width)
         scale2  = min(canvas_width / height, canvas_height / width)
-        scale = max(scale1, scale2) 
+        scale = max(scale1, scale2)
     else:
         scale = (canvas_height * canvas_width / (height * width))**(1/2)
 
@@ -92,28 +88,28 @@ def calculate_new_dimensions(canvas_height, canvas_width, height, width, fit_int
 
 def resize_and_remove_background(img_list, budget_width, budget_height, rm_background, fit_into_canvas = False ):
     if rm_background  > 0:
-        session = new_session() 
+        session = new_session()
 
     output_list =[]
     for i, img in enumerate(img_list):
-        width, height =  img.size 
+        width, height =  img.size
 
         if fit_into_canvas:
-            white_canvas = np.ones((budget_height, budget_width, 3), dtype=np.uint8) * 255 
+            white_canvas = np.ones((budget_height, budget_width, 3), dtype=np.uint8) * 255
             scale = min(budget_height / height, budget_width / width)
             new_height = int(height * scale)
             new_width = int(width * scale)
-            resized_image= img.resize((new_width,new_height), resample=Image.Resampling.LANCZOS) 
+            resized_image= img.resize((new_width,new_height), resample=Image.Resampling.LANCZOS)
             top = (budget_height - new_height) // 2
             left = (budget_width - new_width) // 2
-            white_canvas[top:top + new_height, left:left + new_width] = np.array(resized_image)            
-            resized_image = Image.fromarray(white_canvas)  
+            white_canvas[top:top + new_height, left:left + new_width] = np.array(resized_image)
+            resized_image = Image.fromarray(white_canvas)
         else:
             scale = (budget_height * budget_width / (height * width))**(1/2)
             new_height = int( round(height * scale / 16) * 16)
             new_width = int( round(width * scale / 16) * 16)
-            resized_image= img.resize((new_width,new_height), resample=Image.Resampling.LANCZOS) 
-        if rm_background == 1 or rm_background == 2 and i > 0 :
+            resized_image= img.resize((new_width,new_height), resample=Image.Resampling.LANCZOS)
+        if rm_background == 1 or (rm_background == 2 and i > 0) :
             # resized_image = remove(resized_image, session=session, alpha_matting_erode_size = 1,alpha_matting_background_threshold = 70, alpha_foreground_background_threshold = 100, alpha_matting = True, bgcolor=[255, 255, 255, 0]).convert('RGB')
             resized_image = remove(resized_image, session=session, alpha_matting_erode_size = 1, alpha_matting = True, bgcolor=[255, 255, 255, 0]).convert('RGB')
         output_list.append(resized_image) #alpha_matting_background_threshold = 30, alpha_foreground_background_threshold = 200,
@@ -165,9 +161,8 @@ def cache_video(tensor,
         except Exception as e:
             error = e
             continue
-    else:
-        print(f'cache_video failed, error: {error}', flush=True)
-        return None
+    print(f'cache_video failed, error: {error}', flush=True)
+    return None
 
 
 def cache_image(tensor,
@@ -201,8 +196,7 @@ def cache_image(tensor,
 
 
 def str2bool(v):
-    """
-    Convert a string to a boolean.
+    """Convert a string to a boolean.
 
     Supported true values: 'yes', 'true', 't', 'y', '1'
     Supported false values: 'no', 'false', 'f', 'n', '0'
@@ -215,13 +209,13 @@ def str2bool(v):
 
     Raises:
         argparse.ArgumentTypeError: If the value cannot be converted to boolean.
+
     """
     if isinstance(v, bool):
         return v
     v_lower = v.lower()
     if v_lower in ('yes', 'true', 't', 'y', '1'):
         return True
-    elif v_lower in ('no', 'false', 'f', 'n', '0'):
+    if v_lower in ('no', 'false', 'f', 'n', '0'):
         return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected (True/False)')
+    raise argparse.ArgumentTypeError('Boolean value expected (True/False)')

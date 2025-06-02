@@ -17,33 +17,30 @@ from diffusers.utils import deprecate, logging
 from diffusers.utils.torch_utils import randn_tensor
 from einops import rearrange
 from transformers import (
-    T5EncoderModel,
-    T5Tokenizer,
     AutoModelForCausalLM,
     AutoProcessor,
     AutoTokenizer,
+    T5EncoderModel,
+    T5Tokenizer,
 )
 
 from ltx_video.models.autoencoders.causal_video_autoencoder import (
     CausalVideoAutoencoder,
 )
+from ltx_video.models.autoencoders.latent_upsampler import LatentUpsampler
 from ltx_video.models.autoencoders.vae_encode import (
     get_vae_size_scale_factor,
     latent_to_pixel_coords,
+    normalize_latents,
+    un_normalize_latents,
     vae_decode,
     vae_encode,
 )
 from ltx_video.models.transformers.symmetric_patchifier import Patchifier
 from ltx_video.models.transformers.transformer3d import Transformer3DModel
 from ltx_video.schedulers.rf import TimestepShifter
-from ltx_video.utils.skip_layer_strategy import SkipLayerStrategy
 from ltx_video.utils.prompt_enhance_utils import generate_cinematic_prompt
-from ltx_video.models.autoencoders.latent_upsampler import LatentUpsampler
-from ltx_video.models.autoencoders.vae_encode import (
-    un_normalize_latents,
-    normalize_latents,
-)
-
+from ltx_video.utils.skip_layer_strategy import SkipLayerStrategy
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -132,8 +129,7 @@ def retrieve_timesteps(
     skip_final_inference_steps: int = 0,
     **kwargs,
 ):
-    """
-    Calls the scheduler's `set_timesteps` method and retrieves timesteps from the scheduler after the call. Handles
+    """Calls the scheduler's `set_timesteps` method and retrieves timesteps from the scheduler after the call. Handles
     custom timesteps. Any kwargs will be supplied to `scheduler.set_timesteps`.
 
     Args:
@@ -155,6 +151,7 @@ def retrieve_timesteps(
     Returns:
         `Tuple[torch.Tensor, int]`: A tuple where the first element is the timestep schedule from the scheduler and the
         second element is the number of inference steps.
+
     """
     if timesteps is not None:
         accepts_timesteps = "timesteps" in set(
@@ -185,7 +182,7 @@ def retrieve_timesteps(
 
     timesteps = timesteps[
         skip_initial_inference_steps : len(timesteps) - skip_final_inference_steps
-    ]    
+    ]
 
     if max_timestep < 1.0:
         if max_timestep < timesteps.min():
@@ -201,8 +198,7 @@ def retrieve_timesteps(
 
 @dataclass
 class ConditioningItem:
-    """
-    Defines a single frame-conditioning item - a single frame or a sequence of frames.
+    """Defines a single frame-conditioning item - a single frame or a sequence of frames.
 
     Attributes:
         media_item (torch.Tensor): shape=(b, 3, f, h, w). The media item to condition on.
@@ -210,6 +206,7 @@ class ConditioningItem:
         conditioning_strength (float): The strength of the conditioning (1.0 = full conditioning).
         media_x (Optional[int]): Optional left x coordinate of the media item in the generated frame.
         media_y (Optional[int]): Optional top y coordinate of the media item in the generated frame.
+
     """
 
     media_item: torch.Tensor
@@ -220,8 +217,7 @@ class ConditioningItem:
 
 
 class LTXVideoPipeline(DiffusionPipeline):
-    r"""
-    Pipeline for text-to-image generation using LTX-Video.
+    r"""Pipeline for text-to-image generation using LTX-Video.
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
     library implements for all the pipelines (such as downloading or saving, running on a particular device, etc.)
@@ -240,6 +236,7 @@ class LTXVideoPipeline(DiffusionPipeline):
             A text conditioned `Transformer2DModel` to denoise the encoded image latents.
         scheduler ([`SchedulerMixin`]):
             A scheduler to be used in combination with `transformer` to denoise the encoded image latents.
+
     """
 
     bad_punct_regex = re.compile(
@@ -256,7 +253,7 @@ class LTXVideoPipeline(DiffusionPipeline):
         + r"\/"
         + r"\*"
         + r"]{1,}"
-    )  # noqa
+    )
 
     _optional_components = [
         "tokenizer",
@@ -308,9 +305,8 @@ class LTXVideoPipeline(DiffusionPipeline):
         if emb.shape[0] == 1:
             keep_index = mask.sum().item()
             return emb[:, :, :keep_index, :], keep_index
-        else:
-            masked_feature = emb * mask[:, None, :, None]
-            return masked_feature, emb.shape[2]
+        masked_feature = emb * mask[:, None, :, None]
+        return masked_feature, emb.shape[2]
 
     # Adapted from diffusers.pipelines.deepfloyd_if.pipeline_if.encode_prompt
     def encode_prompt(
@@ -327,8 +323,7 @@ class LTXVideoPipeline(DiffusionPipeline):
         text_encoder_max_tokens: int = 256,
         **kwargs,
     ):
-        r"""
-        Encodes the prompt into text encoder hidden states.
+        r"""Encodes the prompt into text encoder hidden states.
 
         Args:
             prompt (`str` or `List[str]`, *optional*):
@@ -348,8 +343,8 @@ class LTXVideoPipeline(DiffusionPipeline):
                 provided, text embeddings will be generated from `prompt` input argument.
             negative_prompt_embeds (`torch.FloatTensor`, *optional*):
                 Pre-generated negative text embeddings.
-        """
 
+        """
         if "mask_feature" in kwargs:
             deprecation_message = "The use of `mask_feature` is deprecated. It is no longer used in any computation and that doesn't affect the end results. It will be removed in a future version."
             deprecate("mask_feature", "1.0.0", deprecation_message, standard_warn=False)
@@ -528,11 +523,11 @@ class LTXVideoPipeline(DiffusionPipeline):
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
                 " only forward one of the two."
             )
-        elif prompt is None and prompt_embeds is None:
+        if prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (
+        if prompt is not None and (
             not isinstance(prompt, str) and not isinstance(prompt, list)
         ):
             raise ValueError(
@@ -612,8 +607,7 @@ class LTXVideoPipeline(DiffusionPipeline):
         generator,
         eps=1e-6,
     ):
-        """
-        Add timestep-dependent noise to the hard-conditioning latents.
+        """Add timestep-dependent noise to the hard-conditioning latents.
         This helps with motion continuity, especially when conditioned on a single frame.
         """
         noise = randn_tensor(
@@ -640,9 +634,9 @@ class LTXVideoPipeline(DiffusionPipeline):
         generator: torch.Generator | List[torch.Generator],
         vae_per_channel_normalize: bool = True,
     ):
-        """
-        Prepare the initial latent tensor to be denoised.
+        """Prepare the initial latent tensor to be denoised.
         The latents are either pure noise or a noised version of the encoded media items.
+
         Args:
             latents (`torch.FloatTensor` or `None`):
                 The latents to use (provided by the user) or `None` to create new latents.
@@ -660,9 +654,11 @@ class LTXVideoPipeline(DiffusionPipeline):
                 Generator(s) to be used for the noising process.
             vae_per_channel_normalize ('bool'):
                 When encoding the media_items, whether to normalize the latents per-channel.
+
         Returns:
             `torch.FloatTensor`: The latents to be used for the denoising process. This is a tensor of shape
             (batch_size, num_channels, height, width).
+
         """
         if isinstance(generator, list) and len(generator) != latent_shape[0]:
             raise ValueError(
@@ -676,7 +672,7 @@ class LTXVideoPipeline(DiffusionPipeline):
         ), "Cannot provide both latents and media_items. Please provide only one of the two."
 
         assert (
-            latents is None and media_items is None or timestep < 1.0
+            (latents is None and media_items is None) or timestep < 1.0
         ), "Input media_item or latents are provided, but they will be replaced with noise."
 
         if media_items is not None:
@@ -798,15 +794,14 @@ class LTXVideoPipeline(DiffusionPipeline):
         media_items: Optional[torch.Tensor] = None,
         strength: Optional[float] = 1.0,
         skip_initial_inference_steps: int = 0,
-        skip_final_inference_steps: int = 0,        
+        skip_final_inference_steps: int = 0,
         joint_pass: bool = False,
         pass_no: int = -1,
         ltxv_model = None,
         callback=None,
         **kwargs,
     ) -> Union[ImagePipelineOutput, Tuple]:
-        """
-        Function invoked when calling the pipeline for generation.
+        """Function invoked when calling the pipeline for generation.
 
         Args:
             prompt (`str` or `List[str]`, *optional*):
@@ -879,12 +874,14 @@ class LTXVideoPipeline(DiffusionPipeline):
             strength ('floaty', *optional* defaults to 1.0):
                 The editing level in image-to-image / video-to-video. The provided input will be noised
                 to this level.
+
         Examples:
 
         Returns:
             [`~pipelines.ImagePipelineOutput`] or `tuple`:
                 If `return_dict` is `True`, [`~pipelines.ImagePipelineOutput`] is returned, otherwise a `tuple` is
                 returned where the first element is a list with the generated images
+
         """
         if "mask_feature" in kwargs:
             deprecation_message = "The use of `mask_feature` is deprecated. It is no longer used in any computation and that doesn't affect the end results. It will be removed in a future version."
@@ -947,7 +944,7 @@ class LTXVideoPipeline(DiffusionPipeline):
             timesteps,
             max_timestep=strength,
             skip_initial_inference_steps=skip_initial_inference_steps,
-            skip_final_inference_steps=skip_final_inference_steps,            
+            skip_final_inference_steps=skip_final_inference_steps,
             **retrieve_timesteps_kwargs,
         )
         if self.allowed_inference_steps is not None:
@@ -1243,7 +1240,7 @@ class LTXVideoPipeline(DiffusionPipeline):
                 if callback is not None:
                     # callback(i, None, False, pass_no =pass_no)
                     preview_latents= latents.squeeze(0).transpose(0, 1)
-                    preview_latents= preview_latents.reshape(preview_latents.shape[0], latent_num_frames, latent_height, latent_width) 
+                    preview_latents= preview_latents.reshape(preview_latents.shape[0], latent_num_frames, latent_height, latent_width)
                     callback(i, preview_latents, False, pass_no =pass_no)
                     preview_latents = None
                 # call the callback, if provided
@@ -1317,8 +1314,7 @@ class LTXVideoPipeline(DiffusionPipeline):
         t_eps=1e-6,
         stochastic_sampling=False,
     ):
-        """
-        Perform the denoising step for the required tokens, based on the current timestep and
+        """Perform the denoising step for the required tokens, based on the current timestep and
         conditioning mask:
         Conditioning latents have an initial timestep and noising level of (1.0 - conditioning_mask)
         and will start to be denoised when the current timestep is equal or lower than their
@@ -1351,8 +1347,7 @@ class LTXVideoPipeline(DiffusionPipeline):
         vae_per_channel_normalize: bool = False,
         generator=None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
-        """
-        Prepare conditioning tokens based on the provided conditioning items.
+        """Prepare conditioning tokens based on the provided conditioning items.
 
         This method encodes provided conditioning items (video frames or single frames) into latents
         and integrates them with the initial latent tensor. It also calculates corresponding pixel
@@ -1380,6 +1375,7 @@ class LTXVideoPipeline(DiffusionPipeline):
 
         Raises:
             AssertionError: If input shapes, dimensions, or conditions for applying conditioning are invalid.
+
         """
         assert isinstance(self.vae, CausalVideoAutoencoder)
 
@@ -1571,8 +1567,7 @@ class LTXVideoPipeline(DiffusionPipeline):
         width: int,
         strip_latent_border,
     ):
-        """
-        Get the spatial position of the conditioning item in the latent space.
+        """Get the spatial position of the conditioning item in the latent space.
         If requested, strip the conditioning latent borders that do not align with target borders.
         (border latents look different then other latents and might confuse the model)
         """
@@ -1621,10 +1616,10 @@ class LTXVideoPipeline(DiffusionPipeline):
         prefix_latents_mode: str = "concat",
         prefix_soft_conditioning_strength: float = 0.15,
     ):
-        """
-        Special handling for a conditioning sequence that does not start on the first frame.
+        """Special handling for a conditioning sequence that does not start on the first frame.
         The special handling is required to allow a short encoded video to be used as middle
         (or last) sequence in a longer video.
+
         Args:
             init_latents (torch.Tensor): The initial noise latents to be updated.
             init_conditioning_mask (torch.Tensor): The initial conditioning mask to be updated.
@@ -1689,8 +1684,7 @@ class LTXVideoPipeline(DiffusionPipeline):
     def trim_conditioning_sequence(
         self, start_frame: int, sequence_num_frames: int, target_num_frames: int
     ):
-        """
-        Trim a conditioning sequence to the allowed number of frames.
+        """Trim a conditioning sequence to the allowed number of frames.
 
         Args:
             start_frame (int): The target frame number of the first frame in the sequence.
@@ -1699,6 +1693,7 @@ class LTXVideoPipeline(DiffusionPipeline):
 
         Returns:
             int: updated sequence length
+
         """
         scale_factor = self.video_scale_factor
         num_frames = min(sequence_num_frames, target_num_frames - start_frame)
@@ -1709,8 +1704,7 @@ class LTXVideoPipeline(DiffusionPipeline):
 def adain_filter_latent(
     latents: torch.Tensor, reference_latents: torch.Tensor, factor=1.0
 ):
-    """
-    Applies Adaptive Instance Normalization (AdaIN) to a latent tensor based on
+    """Applies Adaptive Instance Normalization (AdaIN) to a latent tensor based on
     statistics from a reference latent tensor.
 
     Args:
@@ -1721,6 +1715,7 @@ def adain_filter_latent(
 
     Returns:
         torch.Tensor: The transformed latent tensor
+
     """
     result = latents.clone()
 
@@ -1808,12 +1803,12 @@ class LTXMultiScalePipeline:
 
         z_tile, hw_tile = VAE_tile_size
 
-        if z_tile > 0: 
-            self.vae.enable_z_tiling(z_tile)  
-        if hw_tile > 0: 
+        if z_tile > 0:
+            self.vae.enable_z_tiling(z_tile)
+        if hw_tile > 0:
             self.vae.enable_hw_tiling()
             self.vae.set_tiling_params(hw_tile)
-  
+
         ltxv_model = kwargs["ltxv_model"]
         text_encoder_max_tokens = 256
         prompt = kwargs.pop("prompt")
@@ -1859,7 +1854,7 @@ class LTXMultiScalePipeline:
 
 
         kwargs.update(**first_pass)
-        kwargs["num_inference_steps"] = kwargs["num_inference_steps1"] 
+        kwargs["num_inference_steps"] = kwargs["num_inference_steps1"]
         result = video_pipeline(*args, **kwargs)
         if result == None:
             return None
@@ -1870,7 +1865,7 @@ class LTXMultiScalePipeline:
 
         upsampled_latents = adain_filter_latent(
             latents=upsampled_latents, reference_latents=latents
-        )        
+        )
         # upsampled_latents = self.batch_normalize(upsampled_latents, latents)
 
         kwargs = original_kwargs
@@ -1882,7 +1877,7 @@ class LTXMultiScalePipeline:
         kwargs["pass_no"] = 2
 
         kwargs.update(**second_pass)
-        kwargs["num_inference_steps"] = kwargs["num_inference_steps2"] 
+        kwargs["num_inference_steps"] = kwargs["num_inference_steps2"]
 
         result = video_pipeline(*args, **kwargs)
         if result == None:

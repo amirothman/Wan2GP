@@ -4,16 +4,16 @@ import logging
 import math
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from .tokenizers import HuggingfaceTokenizer
 
 __all__ = [
-    'T5Model',
-    'T5Encoder',
     'T5Decoder',
+    'T5Encoder',
     'T5EncoderModel',
+    'T5Model',
 ]
 
 
@@ -84,8 +84,7 @@ class T5Attention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, context=None, mask=None, pos_bias=None):
-        """
-        x:          [B, L1, C].
+        """x:          [B, L1, C].
         context:    [B, L2, C] or None.
         mask:       [B, L2] or [B, L1, L2] or None.
         """
@@ -449,8 +448,7 @@ def _t5(name,
         from .tokenizers import HuggingfaceTokenizer
         tokenizer = HuggingfaceTokenizer(f'google/{name}', **tokenizer_kwargs)
         return model, tokenizer
-    else:
-        return model
+    return model
 
 
 def umt5_xxl(**kwargs):

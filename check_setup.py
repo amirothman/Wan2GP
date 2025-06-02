@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Setup Validation Script for run_ltxv.py
+"""Setup Validation Script for run_ltxv.py
 =======================================
 
 This script checks if all requirements are met to run the minimal LTX Video generator.
@@ -10,11 +9,12 @@ import os
 import sys
 from pathlib import Path
 
+
 def check_python_packages():
     """Check if required Python packages are installed."""
     required_packages = [
         'torch',
-        'torchvision', 
+        'torchvision',
         'transformers',
         'diffusers',
         'imageio',
@@ -23,9 +23,9 @@ def check_python_packages():
         'yaml',
         'mmgp'
     ]
-    
+
     missing_packages = []
-    
+
     for package in required_packages:
         try:
             if package == 'PIL':
@@ -38,23 +38,23 @@ def check_python_packages():
         except ImportError:
             missing_packages.append(package)
             print(f"✗ {package} - MISSING")
-    
+
     return missing_packages
 
 def check_model_files():
     """Check if required model files exist."""
     model_paths = {
         "Transformer Model": "ckpts/ltxv_0.9.7_13B_distilled_bf16.safetensors",
-        "VAE Model": "ckpts/ltxv_0.9.7_VAE.safetensors", 
+        "VAE Model": "ckpts/ltxv_0.9.7_VAE.safetensors",
         "Text Encoder": "ckpts/T5_xxl_1.1_enc_bf16.safetensors",
         "Tokenizer": "ckpts/T5_xxl_1.1",
         "Scheduler": "ckpts/ltxv_scheduler.json",
         "Spatial Upsampler": "ckpts/ltxv_0.9.7_spatial_upscaler.safetensors",
         "Config File": "ltx_video/configs/ltxv-13b-0.9.7-distilled.yaml"
     }
-    
+
     missing_files = []
-    
+
     for name, path in model_paths.items():
         if os.path.exists(path):
             if os.path.isfile(path):
@@ -65,7 +65,7 @@ def check_model_files():
         else:
             missing_files.append((name, path))
             print(f"✗ {name}: {path} - MISSING")
-    
+
     return missing_files
 
 def check_cuda():
@@ -76,18 +76,17 @@ def check_cuda():
             gpu_count = torch.cuda.device_count()
             gpu_name = torch.cuda.get_device_name(0)
             gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            print(f"✓ CUDA Available")
+            print("✓ CUDA Available")
             print(f"  GPU Count: {gpu_count}")
             print(f"  GPU 0: {gpu_name}")
             print(f"  GPU Memory: {gpu_memory:.1f} GB")
-            
+
             if gpu_memory < 8:
                 print(f"⚠️  Warning: GPU has only {gpu_memory:.1f}GB VRAM. 8GB+ recommended.")
-            
+
             return True
-        else:
-            print("✗ CUDA Not Available - will use CPU (very slow)")
-            return False
+        print("✗ CUDA Not Available - will use CPU (very slow)")
+        return False
     except ImportError:
         print("✗ PyTorch not installed")
         return False
@@ -95,7 +94,7 @@ def check_cuda():
 def check_output_directory():
     """Check if output directory exists and is writable."""
     output_dir = Path("output")
-    
+
     if output_dir.exists():
         if output_dir.is_dir():
             # Test write permissions
@@ -125,9 +124,9 @@ def main():
     print("=" * 60)
     print("🔍 LTX Video Setup Validation")
     print("=" * 60)
-    
+
     all_good = True
-    
+
     # Check Python packages
     print("\n📦 Checking Python packages...")
     missing_packages = check_python_packages()
@@ -137,11 +136,11 @@ def main():
         all_good = False
     else:
         print("✅ All required packages installed")
-    
+
     # Check CUDA
     print("\n🖥️  Checking CUDA...")
     cuda_available = check_cuda()
-    
+
     # Check model files
     print("\n📁 Checking model files...")
     missing_files = check_model_files()
@@ -153,13 +152,13 @@ def main():
         all_good = False
     else:
         print("✅ All model files found")
-    
+
     # Check output directory
     print("\n📂 Checking output directory...")
     output_ok = check_output_directory()
     if not output_ok:
         all_good = False
-    
+
     # Final summary
     print("\n" + "=" * 60)
     if all_good:
@@ -171,7 +170,7 @@ def main():
         print("❌ Setup validation FAILED!")
         print("Please fix the issues above before running run_ltxv.py")
     print("=" * 60)
-    
+
     return 0 if all_good else 1
 
 if __name__ == "__main__":

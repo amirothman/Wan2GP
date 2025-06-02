@@ -1,26 +1,23 @@
-from typing import Any, List, Tuple, Optional, Union, Dict
-from einops import rearrange
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-from diffusers.models import ModelMixin
 from diffusers.configuration_utils import ConfigMixin, register_to_config
+from diffusers.models import ModelMixin
+from einops import rearrange
+from torch import nn
 
 from .activation_layers import get_activation_layer
+from .attenion import attention, get_cu_seqlens, parallel_attention
+from .embed_layers import PatchEmbed, TextProjection, TimestepEmbedder
+from .mlp_layers import MLP, FinalLayer, MLPEmbedder
+from .modulate_layers import ModulateDiT, apply_gate, modulate
 from .norm_layers import get_norm_layer
-from .embed_layers import TimestepEmbedder, PatchEmbed, TextProjection
-from .attenion import attention, parallel_attention, get_cu_seqlens
 from .posemb_layers import apply_rotary_emb
-from .mlp_layers import MLP, MLPEmbedder, FinalLayer
-from .modulate_layers import ModulateDiT, modulate, apply_gate
 from .token_refiner import SingleTokenRefiner
 
 
 class MMDoubleStreamBlock(nn.Module):
-    """
-    A multimodal dit block with seperate modulation for
+    """A multimodal dit block with seperate modulation for
     text and image/video, see more details (SD3): https://arxiv.org/abs/2403.03206
                                      (Flux.1): https://github.com/black-forest-labs/flux
     """
@@ -198,7 +195,7 @@ class MMDoubleStreamBlock(nn.Module):
         assert (
             cu_seqlens_q.shape[0] == 2 * img.shape[0] + 1
         ), f"cu_seqlens_q.shape:{cu_seqlens_q.shape}, img.shape[0]:{img.shape[0]}"
-        
+
         # attention computation start
         if not self.hybrid_seq_parallel_attn:
             attn = attention(
@@ -222,7 +219,7 @@ class MMDoubleStreamBlock(nn.Module):
                 cu_seqlens_q=cu_seqlens_q,
                 cu_seqlens_kv=cu_seqlens_kv
             )
-            
+
         # attention computation end
 
         img_attn, txt_attn = attn[:, : img.shape[1]], attn[:, img.shape[1] :]
@@ -253,8 +250,7 @@ class MMDoubleStreamBlock(nn.Module):
 
 
 class MMSingleStreamBlock(nn.Module):
-    """
-    A DiT block with parallel linear layers as described in
+    """A DiT block with parallel linear layers as described in
     https://arxiv.org/abs/2302.05442 and adapted modulation interface.
     Also refer to (SD3): https://arxiv.org/abs/2403.03206
                   (Flux.1): https://github.com/black-forest-labs/flux
@@ -362,7 +358,7 @@ class MMSingleStreamBlock(nn.Module):
         assert (
             cu_seqlens_q.shape[0] == 2 * x.shape[0] + 1
         ), f"cu_seqlens_q.shape:{cu_seqlens_q.shape}, x.shape[0]:{x.shape[0]}"
-        
+
         # attention computation start
         if not self.hybrid_seq_parallel_attn:
             attn = attention(
@@ -394,8 +390,7 @@ class MMSingleStreamBlock(nn.Module):
 
 
 class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
-    """
-    HunyuanVideo Transformer backbone
+    """HunyuanVideo Transformer backbone
 
     Inherited from ModelMixin and ConfigMixin for compatibility with diffusers' sampler StableDiffusionPipeline.
 
@@ -443,6 +438,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         The dtype of the model.
     device: torch.device
         The device of the model.
+
     """
 
     @register_to_config
@@ -695,8 +691,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         return img
 
     def unpatchify(self, x, t, h, w):
-        """
-        x: (N, T, patch_size**2 * C)
+        """x: (N, T, patch_size**2 * C)
         imgs: (N, H, W, C)
         """
         c = self.unpatchify_channels

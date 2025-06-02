@@ -56,8 +56,7 @@ def smart_resize(height: int,
                  factor: int = IMAGE_FACTOR,
                  min_pixels: int = MIN_PIXELS,
                  max_pixels: int = MAX_PIXELS) -> tuple[int, int]:
-    """
-    Rescales the image so that the following conditions are met:
+    """Rescales the image so that the following conditions are met:
 
     1. Both dimensions (height and width) are divisible by 'factor'.
 
@@ -135,7 +134,7 @@ def smart_nframes(
     total_frames: int,
     video_fps: int | float,
 ) -> int:
-    """calculate the number of frames for video used for model inputs.
+    """Calculate the number of frames for video used for model inputs.
 
     Args:
         ele (dict): a dict contains the configuration of video.
@@ -152,6 +151,7 @@ def smart_nframes(
 
     Returns:
         int: the number of frames for video used for model inputs.
+
     """
     assert not ("fps" in ele and
                 "nframes" in ele), "Only accept either `fps` or `nframes`"
@@ -167,15 +167,15 @@ def smart_nframes(
         nframes = total_frames / video_fps * fps
         nframes = min(max(nframes, min_frames), max_frames)
         nframes = round_by_factor(nframes, FRAME_FACTOR)
-    if not (FRAME_FACTOR <= nframes and nframes <= total_frames):
+    if not (nframes >= FRAME_FACTOR and nframes <= total_frames):
         raise ValueError(
             f"nframes should in interval [{FRAME_FACTOR}, {total_frames}], but got {nframes}."
         )
     return nframes
 
 
-def _read_video_torchvision(ele: dict,) -> torch.Tensor:
-    """read video using torchvision.io.read_video
+def _read_video_torchvision(ele: dict) -> torch.Tensor:
+    """Read video using torchvision.io.read_video
 
     Args:
         ele (dict): a dict contains the configuration of video.
@@ -183,8 +183,10 @@ def _read_video_torchvision(ele: dict,) -> torch.Tensor:
             - video: the path of video. support "file://", "http://", "https://" and local path.
             - video_start: the start time of video.
             - video_end: the end time of video.
+
     Returns:
         torch.Tensor: the video tensor with shape (T, C, H, W).
+
     """
     video_path = ele["video"]
     if version.parse(torchvision.__version__) < version.parse("0.19.0"):
@@ -198,7 +200,7 @@ def _read_video_torchvision(ele: dict,) -> torch.Tensor:
     video, audio, info = io.read_video(
         video_path,
         start_pts=ele.get("video_start", 0.0),
-        end_pts=ele.get("video_end", None),
+        end_pts=ele.get("video_end"),
         pts_unit="sec",
         output_format="TCHW",
     )
@@ -218,8 +220,8 @@ def is_decord_available() -> bool:
     return importlib.util.find_spec("decord") is not None
 
 
-def _read_video_decord(ele: dict,) -> torch.Tensor:
-    """read video using decord.VideoReader
+def _read_video_decord(ele: dict) -> torch.Tensor:
+    """Read video using decord.VideoReader
 
     Args:
         ele (dict): a dict contains the configuration of video.
@@ -227,8 +229,10 @@ def _read_video_decord(ele: dict,) -> torch.Tensor:
             - video: the path of video. support "file://", "http://", "https://" and local path.
             - video_start: the start time of video.
             - video_end: the end time of video.
+
     Returns:
         torch.Tensor: the video tensor with shape (T, C, H, W).
+
     """
     import decord
     video_path = ele["video"]
@@ -306,23 +310,22 @@ def fetch_video(
             antialias=True,
         ).float()
         return video
-    else:
-        assert isinstance(ele["video"], (list, tuple))
-        process_info = ele.copy()
-        process_info.pop("type", None)
-        process_info.pop("video", None)
-        images = [
-            fetch_image({
-                "image": video_element,
-                **process_info
-            },
-                        size_factor=image_factor)
-            for video_element in ele["video"]
-        ]
-        nframes = ceil_by_factor(len(images), FRAME_FACTOR)
-        if len(images) < nframes:
-            images.extend([images[-1]] * (nframes - len(images)))
-        return images
+    assert isinstance(ele["video"], (list, tuple))
+    process_info = ele.copy()
+    process_info.pop("type", None)
+    process_info.pop("video", None)
+    images = [
+        fetch_image({
+            "image": video_element,
+            **process_info
+        },
+                    size_factor=image_factor)
+        for video_element in ele["video"]
+    ]
+    nframes = ceil_by_factor(len(images), FRAME_FACTOR)
+    if len(images) < nframes:
+        images.extend([images[-1]] * (nframes - len(images)))
+    return images
 
 
 def extract_vision_info(

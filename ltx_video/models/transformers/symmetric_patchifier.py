@@ -33,8 +33,7 @@ class Patchifier(ConfigMixin, ABC):
     def get_latent_coords(
         self, latent_num_frames, latent_height, latent_width, batch_size, device
     ):
-        """
-        Return a tensor of shape [batch_size, 3, num_patches] containing the
+        """Return a tensor of shape [batch_size, 3, num_patches] containing the
             top-left corner latent coordinates of each latent patch.
         The tensor is repeated for each batch element.
         """

@@ -2,8 +2,9 @@ from pathlib import Path
 
 import torch
 
+from ..constants import PRECISION_TO_TYPE, VAE_PATH
 from .autoencoder_kl_causal_3d import AutoencoderKLCausal3D
-from ..constants import VAE_PATH, PRECISION_TO_TYPE
+
 
 def load_vae(vae_type: str="884-16c-hy",
              vae_precision: str=None,
@@ -13,7 +14,7 @@ def load_vae(vae_type: str="884-16c-hy",
              logger=None,
              device=None
              ):
-    """the fucntion to load the 3D VAE model
+    """The fucntion to load the 3D VAE model
 
     Args:
         vae_type (str): the type of the 3D VAE model. Defaults to "884-16c-hy".
@@ -22,10 +23,11 @@ def load_vae(vae_type: str="884-16c-hy",
         vae_path (str, optional): the path to vae. Defaults to None.
         logger (_type_, optional): logger. Defaults to None.
         device (_type_, optional): device to load vae. Defaults to None.
+
     """
     if vae_path is None:
         vae_path = VAE_PATH[vae_type]
-    
+
     if logger is not None:
         logger.info(f"Loading 3D VAE model ({vae_type}) from: {vae_path}")
 
@@ -37,11 +39,11 @@ def load_vae(vae_type: str="884-16c-hy",
     else:
         vae = AutoencoderKLCausal3D.from_config(config)
 
-    vae_ckpt = Path(vae_path) 
-    # vae_ckpt = Path("ckpts/hunyuan_video_VAE.pt") 
+    vae_ckpt = Path(vae_path)
+    # vae_ckpt = Path("ckpts/hunyuan_video_VAE.pt")
     # vae_ckpt = Path("c:/temp/hvae/pytorch_model.pt")
     assert vae_ckpt.exists(), f"VAE checkpoint not found: {vae_ckpt}"
-    
+
     from mmgp import offload
 
     # ckpt = torch.load(vae_ckpt, weights_only=True, map_location=vae.device)
@@ -59,7 +61,7 @@ def load_vae(vae_type: str="884-16c-hy",
 
     spatial_compression_ratio = vae.config.spatial_compression_ratio
     time_compression_ratio = vae.config.time_compression_ratio
-    
+
     if vae_precision is not None:
         vae = vae.to(dtype=PRECISION_TO_TYPE[vae_precision])
 

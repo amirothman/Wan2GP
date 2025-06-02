@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 class RMSNorm(nn.Module):
@@ -11,8 +11,7 @@ class RMSNorm(nn.Module):
         device=None,
         dtype=None,
     ):
-        """
-        Initialize the RMSNorm normalization layer.
+        """Initialize the RMSNorm normalization layer.
 
         Args:
             dim (int): The dimension of the input tensor.
@@ -30,8 +29,7 @@ class RMSNorm(nn.Module):
             self.weight = nn.Parameter(torch.ones(dim, **factory_kwargs))
 
     def _norm(self, x):
-        """
-        Apply the RMSNorm normalization to the input tensor.
+        """Apply the RMSNorm normalization to the input tensor.
 
         Args:
             x (torch.Tensor): The input tensor.
@@ -40,12 +38,10 @@ class RMSNorm(nn.Module):
             torch.Tensor: The normalized tensor.
 
         """
-
         return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
 
     def forward(self, x):
-        """
-        Forward pass through the RMSNorm layer.
+        """Forward pass through the RMSNorm layer.
 
         Args:
             x (torch.Tensor): The input tensor.
@@ -71,18 +67,17 @@ class RMSNorm(nn.Module):
 
 
 def get_norm_layer(norm_layer):
-    """
-    Get the normalization layer.
+    """Get the normalization layer.
 
     Args:
         norm_layer (str): The type of normalization layer.
 
     Returns:
         norm_layer (nn.Module): The normalization layer.
+
     """
     if norm_layer == "layer":
         return nn.LayerNorm
-    elif norm_layer == "rms":
+    if norm_layer == "rms":
         return RMSNorm
-    else:
-        raise NotImplementedError(f"Norm layer {norm_layer} is not implemented")
+    raise NotImplementedError(f"Norm layer {norm_layer} is not implemented")

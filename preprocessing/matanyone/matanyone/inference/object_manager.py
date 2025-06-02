@@ -1,12 +1,12 @@
-from typing import Union, List, Dict
+from typing import Dict, List, Union
 
 import torch
+
 from .object_info import ObjectInfo
 
 
 class ObjectManager:
-    """
-    Object IDs are immutable. The same ID always represent the same object.
+    """Object IDs are immutable. The same ID always represent the same object.
     Temporary IDs are the positions of each object in the tensor. It changes as objects get removed.
     Temporary IDs start from 1.
     """

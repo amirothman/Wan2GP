@@ -1,14 +1,14 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 
 import os
 
 import cv2
-import torch
 import numpy as np
-from . import util
-from .wholebody import Wholebody, HWC3, resize_image
+import torch
 from PIL import Image
+
+from . import util
+from .wholebody import HWC3, Wholebody, resize_image
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -148,6 +148,7 @@ class PoseBodyFaceVideoAnnotator(PoseBodyFaceAnnotator):
 
 import imageio
 
+
 def save_one_video(file_path, videos, fps=8, quality=8, macro_block_size=None):
     try:
         video_writer = imageio.get_writer(file_path, fps=fps, codec='libx264', quality=quality, macro_block_size=macro_block_size)
@@ -158,7 +159,7 @@ def save_one_video(file_path, videos, fps=8, quality=8, macro_block_size=None):
     except Exception as e:
         print(f"Video save error: {e}")
         return False
-    
+
 def get_frames(video_path):
     frames = []
 

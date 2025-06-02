@@ -1,9 +1,11 @@
 import math
 import os
+from urllib.parse import urlparse
+
 import requests
 from torch.hub import download_url_to_file, get_dir
 from tqdm import tqdm
-from urllib.parse import urlparse
+
 
 def sizeof_fmt(size, suffix='B'):
     """Get human readable file size.
@@ -14,6 +16,7 @@ def sizeof_fmt(size, suffix='B'):
 
     Return:
         str: Formated file siz.
+
     """
     for unit in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
         if abs(size) < 1024.0:
@@ -30,7 +33,6 @@ def download_file_from_google_drive(file_id, save_path):
         file_id (str): File id.
         save_path (str): Save path.
     """
-
     session = requests.Session()
     URL = 'https://docs.google.com/uc?export=download'
     params = {'id': file_id}
@@ -89,8 +91,10 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
             Default: None.
         progress (bool): Whether to show the download progress. Default: True.
         file_name (str): The downloaded file name. If None, use the file name in the url. Default: None.
+
     Returns:
         str: The path to the downloaded file.
+
     """
     if model_dir is None:  # use the pytorch hub_dir
         hub_dir = get_dir()

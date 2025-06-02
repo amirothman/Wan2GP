@@ -1,5 +1,5 @@
-import torch.nn as nn
 from einops import rearrange
+from torch import nn
 
 
 class PixelShuffleND(nn.Module):
@@ -18,14 +18,14 @@ class PixelShuffleND(nn.Module):
                 p2=self.upscale_factors[1],
                 p3=self.upscale_factors[2],
             )
-        elif self.dims == 2:
+        if self.dims == 2:
             return rearrange(
                 x,
                 "b (c p1 p2) h w -> b c (h p1) (w p2)",
                 p1=self.upscale_factors[0],
                 p2=self.upscale_factors[1],
             )
-        elif self.dims == 1:
+        if self.dims == 1:
             return rearrange(
                 x,
                 "b (c p1) f h w -> b c (f p1) h w",

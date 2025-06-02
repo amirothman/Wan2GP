@@ -1,5 +1,6 @@
-from typing import Dict, List, Optional, Literal
 from collections import defaultdict
+from typing import Dict, List, Literal, Optional
+
 import torch
 
 
@@ -14,13 +15,12 @@ def _add_last_dim(dictionary, key, new_value, prepend=False):
 
 
 class KeyValueMemoryStore:
-    """
-    Works for key/value pairs type storage
+    """Works for key/value pairs type storage
     e.g., working and long-term memory
     """
+
     def __init__(self, save_selection: bool = False, save_usage: bool = False):
-        """
-        We store keys and values of objects that first appear in the same frame in a bucket.
+        """We store keys and values of objects that first appear in the same frame in a bucket.
         Each bucket contains a set of object ids.
         Each bucket is associated with a single key tensor
             and a dictionary of value tensors indexed by object id.
@@ -55,8 +55,7 @@ class KeyValueMemoryStore:
             selection: torch.Tensor,
             supposed_bucket_id: int = -1,
             as_permanent: Literal['no', 'first', 'all'] = 'no') -> None:
-        """
-        key: (1/2)*C*N
+        """key: (1/2)*C*N
         values: dict of values ((1/2)*C*N), object ids are used as keys
         shrinkage: (1/2)*1*N
         selection: (1/2)*C*N
@@ -241,9 +240,8 @@ class KeyValueMemoryStore:
         # return normalized usage
         if not self.save_usage:
             raise RuntimeError('I did not count usage!')
-        else:
-            usage = self.use_cnt[bucket_id] / self.life_cnt[bucket_id]
-            return usage
+        usage = self.use_cnt[bucket_id] / self.life_cnt[bucket_id]
+        return usage
 
     def get_all_sliced(
         self, bucket_id: int, start: int, end: int
@@ -309,8 +307,7 @@ class KeyValueMemoryStore:
     def size(self, bucket_id: int) -> int:
         if bucket_id not in self.k:
             return 0
-        else:
-            return self.k[bucket_id].shape[-1]
+        return self.k[bucket_id].shape[-1]
 
     def perm_size(self, bucket_id: int) -> int:
         return self.perm_end_pt[bucket_id]
@@ -321,8 +318,7 @@ class KeyValueMemoryStore:
     def engaged(self, bucket_id: Optional[int] = None) -> bool:
         if bucket_id is None:
             return len(self.buckets) > 0
-        else:
-            return bucket_id in self.buckets
+        return bucket_id in self.buckets
 
     @property
     def num_objects(self) -> int:

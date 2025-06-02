@@ -1,19 +1,14 @@
-import time
-import torch
 import cv2
-from PIL import Image, ImageDraw, ImageOps
 import numpy as np
-from typing import Union
-from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
-import matplotlib.pyplot as plt
-import PIL
+import torch
+from segment_anything import SamPredictor, sam_model_registry
+
 from .mask_painter import mask_painter
 
 
 class BaseSegmenter:
     def __init__(self, SAM_checkpoint, model_type, device='cuda:0'):
-        """
-        device: model device
+        """device: model device
         SAM_checkpoint: path of SAM checkpoint
         model_type: vit_b, vit_l, vit_h
         """
@@ -31,7 +26,7 @@ class BaseSegmenter:
         from mmgp import offload
         # self.model.to(torch.float16)
         # offload.save_model(self.model, "ckpts/mask/sam_vit_h_4b8939_fp16.safetensors")
-        
+
         offload.load_model_data(self.model, "ckpts/mask/sam_vit_h_4b8939_fp16.safetensors")
         self.model.to(torch.float32) # need to be optimized, if not f32 crappy precision
         self.model.to(device=self.device)
@@ -49,7 +44,7 @@ class BaseSegmenter:
         self.predictor.set_image(image)
         self.embedded = True
         return
-    
+
     @torch.no_grad()
     def reset_image(self):
         # reset image embeding
@@ -57,8 +52,7 @@ class BaseSegmenter:
         self.embedded = False
 
     def predict(self, prompts, mode, multimask=True):
-        """
-        image: numpy array, h, w, 3
+        """image: numpy array, h, w, 3
         prompts: dictionary, 3 keys: 'point_coords', 'point_labels', 'mask_input'
         prompts['point_coords']: numpy array [N,2]
         prompts['point_labels']: numpy array [1,N]
@@ -69,19 +63,19 @@ class BaseSegmenter:
         """
         assert self.embedded, 'prediction is called before set_image (feature embedding).'
         assert mode in ['point', 'mask', 'both'], 'mode must be point, mask, or both'
-        
+
         with torch.autocast(device_type='cuda', dtype=torch.float16):
             if mode == 'point':
-                masks, scores, logits = self.predictor.predict(point_coords=prompts['point_coords'], 
-                                    point_labels=prompts['point_labels'], 
+                masks, scores, logits = self.predictor.predict(point_coords=prompts['point_coords'],
+                                    point_labels=prompts['point_labels'],
                                     multimask_output=multimask)
             elif mode == 'mask':
-                masks, scores, logits = self.predictor.predict(mask_input=prompts['mask_input'], 
+                masks, scores, logits = self.predictor.predict(mask_input=prompts['mask_input'],
                                     multimask_output=multimask)
             elif mode == 'both':   # both
-                masks, scores, logits = self.predictor.predict(point_coords=prompts['point_coords'], 
-                                    point_labels=prompts['point_labels'], 
-                                    mask_input=prompts['mask_input'], 
+                masks, scores, logits = self.predictor.predict(point_coords=prompts['point_coords'],
+                                    point_labels=prompts['point_labels'],
+                                    mask_input=prompts['mask_input'],
                                     multimask_output=multimask)
             else:
                 raise("Not implement now!")
@@ -99,16 +93,16 @@ if __name__ == "__main__":
     model_type = 'vit_h'
     device = "cuda:4"
     base_segmenter = BaseSegmenter(SAM_checkpoint=SAM_checkpoint, model_type=model_type, device=device)
-    
+
     # image embedding (once embedded, multiple prompts can be applied)
     base_segmenter.set_image(image)
-    
+
     # examples
     # point only ------------------------
     mode = 'point'
     prompts = {
         'point_coords': np.array([[500, 375], [1125, 625]]),
-        'point_labels': np.array([1, 1]), 
+        'point_labels': np.array([1, 1]),
     }
     masks, scores, logits = base_segmenter.predict(prompts, mode, multimask=False)  # masks (n, h, w), scores (n,), logits (n, 256, 256)
     painted_image = mask_painter(image, masks[np.argmax(scores)].astype('uint8'), background_alpha=0.8)
@@ -121,7 +115,7 @@ if __name__ == "__main__":
     prompts = {'mask_input': mask_input [None, :, :]}
     prompts = {
         'point_coords': np.array([[500, 375], [1125, 625]]),
-        'point_labels': np.array([1, 0]), 
+        'point_labels': np.array([1, 0]),
         'mask_input': mask_input[None, :, :]
     }
     masks, scores, logits = base_segmenter.predict(prompts, mode, multimask=True)  # masks (n, h, w), scores (n,), logits (n, 256, 256)
@@ -132,9 +126,9 @@ if __name__ == "__main__":
     # mask only ------------------------
     mode = 'mask'
     mask_input  = logits[np.argmax(scores), :, :]
-    
+
     prompts = {'mask_input': mask_input[None, :, :]}
-    
+
     masks, scores, logits = base_segmenter.predict(prompts, mode, multimask=True)  # masks (n, h, w), scores (n,), logits (n, 256, 256)
     painted_image = mask_painter(image, masks[np.argmax(scores)].astype('uint8'), background_alpha=0.8)
     painted_image = cv2.cvtColor(painted_image, cv2.COLOR_RGB2BGR)  # numpy array (h, w, 3)

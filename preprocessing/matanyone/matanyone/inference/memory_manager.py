@@ -1,20 +1,21 @@
 import logging
-from omegaconf import DictConfig
-from typing import List, Dict
-import torch
+from typing import Dict, List
 
-from .object_manager import ObjectManager
-from .kv_memory_store import KeyValueMemoryStore
+import torch
+from omegaconf import DictConfig
+
 from ..model.matanyone import MatAnyone
-from ..model.utils.memory_utils import get_similarity, do_softmax
+from ..model.utils.memory_utils import do_softmax, get_similarity
+from .kv_memory_store import KeyValueMemoryStore
+from .object_manager import ObjectManager
 
 log = logging.getLogger()
 
 
 class MemoryManager:
+    """Manages all three memory stores and the transition between working/long-term memory
     """
-    Manages all three memory stores and the transition between working/long-term memory
-    """
+
     def __init__(self, cfg: DictConfig, object_manager: ObjectManager):
         self.object_manager = object_manager
         self.sensory_dim = cfg.model.sensory_dim
@@ -82,16 +83,14 @@ class MemoryManager:
             # single object
             if uncert_mask is not None:
                 return v @ affinity * uncert_mask
-            else:
-                return v @ affinity
-        else:
-            bs, num_objects, C, N = v.shape
-            v = v.view(bs, num_objects * C, N)
-            out = v @ affinity
-            if uncert_mask is not None:
-                uncert_mask = uncert_mask.flatten(start_dim=2).expand(-1, C, -1)
-                out = out * uncert_mask
-            return out.view(bs, num_objects, C, -1)
+            return v @ affinity
+        bs, num_objects, C, N = v.shape
+        v = v.view(bs, num_objects * C, N)
+        out = v @ affinity
+        if uncert_mask is not None:
+            uncert_mask = uncert_mask.flatten(start_dim=2).expand(-1, C, -1)
+            out = out * uncert_mask
+        return out.view(bs, num_objects, C, -1)
 
     def _get_mask_by_ids(self, mask: torch.Tensor, obj_ids: List[int]) -> torch.Tensor:
         # -1 because the mask does not contain the background channel
@@ -111,11 +110,10 @@ class MemoryManager:
             value = torch.cat([lt_value, value], dim=-1)
 
         return value
-    
-    def read_first_frame(self, last_msk_value, pix_feat: torch.Tensor, 
+
+    def read_first_frame(self, last_msk_value, pix_feat: torch.Tensor,
              last_mask: torch.Tensor, network: MatAnyone, uncert_output=None) -> Dict[int, torch.Tensor]:
-        """
-        Read from all memory stores and returns a single memory readout tensor for each object
+        """Read from all memory stores and returns a single memory readout tensor for each object
 
         pix_feat: (1/2) x C x H x W
         query_key: (1/2) x C^k x H x W
@@ -168,8 +166,7 @@ class MemoryManager:
     def read(self, pix_feat: torch.Tensor, query_key: torch.Tensor, selection: torch.Tensor,
              last_mask: torch.Tensor, network: MatAnyone, uncert_output=None, last_msk_value=None, ti=None,
              last_pix_feat=None, last_pred_mask=None) -> Dict[int, torch.Tensor]:
-        """
-        Read from all memory stores and returns a single memory readout tensor for each object
+        """Read from all memory stores and returns a single memory readout tensor for each object
 
         pix_feat: (1/2) x C x H x W
         query_key: (1/2) x C^k x H x W
@@ -245,7 +242,7 @@ class MemoryManager:
                 this_msk_value = self._get_visual_values_by_ids(objects)  # (1/2)*num_objects*C*N
                 visual_readout = self._readout(affinity,
                                                this_msk_value, uncert_mask).view(bs, len(objects), self.CV, h, w)
-                
+
                 uncert_output = network.pred_uncertainty(last_pix_feat, pix_feat, last_pred_mask, visual_readout[:,0]-last_msk_value[:,0])
 
                 if uncert_output is not None:
@@ -436,7 +433,7 @@ class MemoryManager:
     def get_sensory(self, ids: List[int]):
         # returns (1/2)*num_objects*C*H*W
         return self._get_sensory_by_ids(ids)
-    
+
     def clear_non_permanent_memory(self):
         self.work_mem.clear_non_permanent_memory()
         if self.use_long_term:
@@ -444,10 +441,10 @@ class MemoryManager:
 
     def clear_sensory_memory(self):
         self.sensory = {}
-    
+
     def clear_work_mem(self):
         self.work_mem = KeyValueMemoryStore(save_selection=self.use_long_term,
                                             save_usage=self.use_long_term)
-    
+
     def clear_obj_mem(self):
         self.obj_v = {}

@@ -1,16 +1,16 @@
 # Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
 import math
-from einops import rearrange
+
+import numpy as np
 import torch
-import torch.cuda.amp as amp
-import torch.nn as nn
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.models.modeling_utils import ModelMixin
-import numpy as np
-from typing import Union,Optional
+from einops import rearrange
 from mmgp import offload
-from .attention import pay_attention
+from torch import nn
 from torch.backends.cuda import sdp_kernel
+
+from .attention import pay_attention
 
 __all__ = ['WanModel']
 
@@ -35,8 +35,7 @@ def reshape_latent(latent, latent_frames):
 
 
 def identify_k( b: float, d: int, N: int):
-    """
-    This function identifies the index of the intrinsic frequency component in a RoPE-based pre-trained diffusion transformer.
+    """This function identifies the index of the intrinsic frequency component in a RoPE-based pre-trained diffusion transformer.
 
     Args:
         b (`float`): The base frequency for RoPE.
@@ -49,8 +48,8 @@ def identify_k( b: float, d: int, N: int):
         In HunyuanVideo, b=256 and d=16, the repetition occurs approximately 8s (N=48 in latent space).
         k, N_k = identify_k(b=256, d=16, N=48)
         In this case, the intrinsic frequency index k is 4, and the period N_k is 50.
-    """
 
+    """
     # Compute the period of each frequency in RoPE according to Eq.(4)
     periods = []
     for j in range(1, d // 2 + 1):
@@ -68,16 +67,15 @@ def rope_params_riflex(max_seq_len, dim, theta=10000, L_test=30, k=6):
     assert dim % 2 == 0
     exponents = torch.arange(0, dim, 2, dtype=torch.float64).div(dim)
     inv_theta_pow = 1.0 / torch.pow(theta, exponents)
-    
+
     inv_theta_pow[k-1] = 0.9 * 2 * torch.pi / L_test
-        
+
     freqs = torch.outer(torch.arange(max_seq_len), inv_theta_pow)
     if True:
         freqs_cos = freqs.cos().repeat_interleave(2, dim=1).float()  # [S, D]
         freqs_sin = freqs.sin().repeat_interleave(2, dim=1).float()  # [S, D]
         return (freqs_cos, freqs_sin)
-    else:
-        freqs = torch.polar(torch.ones_like(freqs), freqs)  # complex64     # [S, D/2]
+    freqs = torch.polar(torch.ones_like(freqs), freqs)  # complex64     # [S, D/2]
     return freqs
 
 
@@ -97,9 +95,9 @@ class WanRMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
 
     def forward(self, x):
-        r"""
-        Args:
-            x(Tensor): Shape [B, L, C]
+        r"""Args:
+        x(Tensor): Shape [B, L, C]
+
         """
         y = x.float()
         y.pow_(2)
@@ -117,7 +115,7 @@ class WanRMSNorm(nn.Module):
 def my_LayerNorm(norm, x):
         y = x.float()
         y_m = y.mean(dim=-1, keepdim=True)
-        y -= y_m 
+        y -= y_m
         del y_m
         y.pow_(2)
         y = y.mean(dim=-1, keepdim=True)
@@ -133,9 +131,9 @@ class WanLayerNorm(nn.LayerNorm):
         super().__init__(dim, elementwise_affine=elementwise_affine, eps=eps)
 
     def forward(self, x):
-        r"""
-        Args:
-            x(Tensor): Shape [B, L, C]
+        r"""Args:
+        x(Tensor): Shape [B, L, C]
+
         """
         # return F.layer_norm(
         #     input, self.normalized_shape, self.weight, self.bias, self.eps
@@ -146,6 +144,7 @@ class WanLayerNorm(nn.LayerNorm):
         # return super().forward(x).type_as(x)
 
 from wan.modules.posemb_layers import apply_rotary_emb
+
 
 class WanSelfAttention(nn.Module):
 
@@ -173,11 +172,11 @@ class WanSelfAttention(nn.Module):
         self.norm_k = WanRMSNorm(dim, eps=eps) if qk_norm else nn.Identity()
 
     def forward(self, xlist, grid_sizes, freqs, block_mask = None):
-        r"""
-        Args:
-            x(Tensor): Shape [B, L, num_heads, C / num_heads]
-            grid_sizes(Tensor): Shape [B, 3], the second dimension contains (F, H, W)
-            freqs(Tensor): Rope freqs, shape [1024, C / num_heads / 2]
+        r"""Args:
+        x(Tensor): Shape [B, L, num_heads, C / num_heads]
+        grid_sizes(Tensor): Shape [B, 3], the second dimension contains (F, H, W)
+        freqs(Tensor): Rope freqs, shape [1024, C / num_heads / 2]
+
         """
         x = xlist[0]
         xlist.clear()
@@ -190,7 +189,7 @@ class WanSelfAttention(nn.Module):
         q = q.view(b, s, n, d) # !!!
         k = self.k(x)
         self.norm_k(k)
-        k = k.view(b, s, n, d) 
+        k = k.view(b, s, n, d)
         v = self.v(x).view(b, s, n, d)
         del x
         qklist = [q,k]
@@ -243,10 +242,10 @@ class WanSelfAttention(nn.Module):
 class WanT2VCrossAttention(WanSelfAttention):
 
     def forward(self, xlist, context, grid_sizes, *args, **kwargs):
-        r"""
-        Args:
-            x(Tensor): Shape [B, L1, C]
-            context(Tensor): Shape [B, L2, C]
+        r"""Args:
+        x(Tensor): Shape [B, L1, C]
+        context(Tensor): Shape [B, L2, C]
+
         """
         x = xlist[0]
         xlist.clear()
@@ -290,15 +289,14 @@ class WanI2VCrossAttention(WanSelfAttention):
         self.norm_k_img = WanRMSNorm(dim, eps=eps) if qk_norm else nn.Identity()
 
     def forward(self, xlist, context, grid_sizes, audio_proj, audio_scale, audio_context_lens ):
-        r"""
-        Args:
-            x(Tensor): Shape [B, L1, C]
-            context(Tensor): Shape [B, L2, C]
-        """
+        r"""Args:
+        x(Tensor): Shape [B, L1, C]
+        context(Tensor): Shape [B, L2, C]
 
+        """
         ##### Enjoy this spagheti VRAM optimizations done by DeepBeepMeep !
         # I am sure you are a nice person and as you copy this code, you will give me officially proper credits:
-        # Please link to https://github.com/deepbeepmeep/Wan2GP and @deepbeepmeep on twitter  
+        # Please link to https://github.com/deepbeepmeep/Wan2GP and @deepbeepmeep on twitter
 
         x = xlist[0]
         xlist.clear()
@@ -401,7 +399,7 @@ class WanAttentionBlock(nn.Module):
         grid_sizes,
         freqs,
         context,
-        hints= None, 
+        hints= None,
         context_scale=1.0,
         cam_emb= None,
         block_mask = None,
@@ -409,21 +407,21 @@ class WanAttentionBlock(nn.Module):
         audio_context_lens= None,
         audio_scale=None,
     ):
-        r"""
-        Args:
-            x(Tensor): Shape [B, L, C]
-            e(Tensor): Shape [B, 6, C]
-            grid_sizes(Tensor): Shape [B, 3], the second dimension contains (F, H, W)
-            freqs(Tensor): Rope freqs, shape [1024, C / num_heads / 2]
+        r"""Args:
+        x(Tensor): Shape [B, L, C]
+        e(Tensor): Shape [B, 6, C]
+        grid_sizes(Tensor): Shape [B, 3], the second dimension contains (F, H, W)
+        freqs(Tensor): Rope freqs, shape [1024, C / num_heads / 2]
+
         """
         hint = None
-        attention_dtype =  self.self_attn.q.weight.dtype 
+        attention_dtype =  self.self_attn.q.weight.dtype
         dtype = x.dtype
 
         if self.block_id is not None and hints is not None:
-            kwargs = { 
+            kwargs = {
                 "grid_sizes" : grid_sizes,
-                "freqs" :freqs, 
+                "freqs" :freqs,
                 "context" : context,
                 "e" : e,
             }
@@ -451,7 +449,7 @@ class WanAttentionBlock(nn.Module):
         y = self.self_attn( xlist, grid_sizes, freqs, block_mask)
         y = y.to(dtype)
 
-        if cam_emb != None: 
+        if cam_emb != None:
             y = self.projector(y)
 
         x, y = reshape_latent(x , latent_frames), reshape_latent(y , latent_frames)
@@ -484,7 +482,7 @@ class WanAttentionBlock(nn.Module):
             mlp_chunk = ffn(y_chunk)
             mlp_chunk = gelu(mlp_chunk)
             y_chunk[...] = ffn2(mlp_chunk)
-            del mlp_chunk 
+            del mlp_chunk
         y = y.view(y_shape)
         y = y.to(dtype)
         x, y = reshape_latent(x , latent_frames), reshape_latent(y , latent_frames)
@@ -496,7 +494,7 @@ class WanAttentionBlock(nn.Module):
                 x.add_(hint)
             else:
                 x.add_(hint, alpha= context_scale)
-        return x 
+        return x
 
 
 
@@ -535,7 +533,7 @@ class VaceWanAttentionBlock(WanAttentionBlock):
         hints[0] = c
         return c_skip
 
-    
+
 class Head(nn.Module):
 
     def __init__(self, dim, out_dim, patch_size, eps=1e-6):
@@ -553,10 +551,10 @@ class Head(nn.Module):
         self.modulation = nn.Parameter(torch.randn(1, 2, dim) / dim**0.5)
 
     def forward(self, x, e):
-        r"""
-        Args:
-            x(Tensor): Shape [B, L1, C]
-            e(Tensor): Shape [B, C]
+        r"""Args:
+        x(Tensor): Shape [B, L1, C]
+        e(Tensor): Shape [B, C]
+
         """
         # assert e.dtype == torch.float32
         dtype = x.dtype
@@ -594,7 +592,7 @@ class WanModel(ModelMixin, ConfigMixin):
         first = next(iter(sd), None)
         if first == None:
             return sd
-        
+
         if first.startswith("lora_unet_"):
             new_sd = {}
             print("Converting Lora Safetensors format to Lora Diffusers format")
@@ -633,7 +631,7 @@ class WanModel(ModelMixin, ConfigMixin):
                     print(f"Lora alpha'{alpha_key}' is missing")
             new_sd.update(new_alphas)
             sd = new_sd
-        from wgp import test_class_i2v 
+        from wgp import test_class_i2v
         if not test_class_i2v(model_filename):
             new_sd = {}
             # convert loras for i2v to t2v
@@ -643,7 +641,7 @@ class WanModel(ModelMixin, ConfigMixin):
                 new_sd[k] = v
             sd = new_sd
 
-        return sd    
+        return sd
     r"""
     Wan diffusion backbone supporting both text-to-video and image-to-video.
     """
@@ -656,7 +654,7 @@ class WanModel(ModelMixin, ConfigMixin):
     @register_to_config
     def __init__(self,
                  vace_layers=None,
-                 vace_in_dim=None,                 
+                 vace_in_dim=None,
                  model_type='t2v',
                  patch_size=(1, 2, 2),
                  text_len=512,
@@ -676,8 +674,7 @@ class WanModel(ModelMixin, ConfigMixin):
                  inject_sample_info = False,
                  fantasytalking_dim = 0,
                  ):
-        r"""
-        Initialize the diffusion model backbone.
+        r"""Initialize the diffusion model backbone.
 
         Args:
             model_type (`str`, *optional*, defaults to 't2v'):
@@ -710,8 +707,8 @@ class WanModel(ModelMixin, ConfigMixin):
                 Enable cross-attention normalization
             eps (`float`, *optional*, defaults to 1e-6):
                 Epsilon value for normalization layers
-        """
 
+        """
         super().__init__()
 
         assert model_type in ['t2v', 'i2v']
@@ -771,7 +768,7 @@ class WanModel(ModelMixin, ConfigMixin):
         # initialize weights
         self.init_weights()
 
-        if vace_layers != None:            
+        if vace_layers != None:
             self.vace_layers = [i for i in range(0, self.num_layers, 2)] if vace_layers is None else vace_layers
             self.vace_in_dim = self.in_dim if vace_in_dim is None else vace_in_dim
 
@@ -805,7 +802,7 @@ class WanModel(ModelMixin, ConfigMixin):
                 block.cam_encoder.weight.data.zero_()
                 block.cam_encoder.bias.data.zero_()
                 block.projector.weight = nn.Parameter(torch.eye(dim))
-                block.projector.bias = nn.Parameter(torch.zeros(dim))            
+                block.projector.bias = nn.Parameter(torch.zeros(dim))
 
         if fantasytalking_dim > 0:
             from fantasytalking.model import WanCrossAttentionProcessor
@@ -816,8 +813,8 @@ class WanModel(ModelMixin, ConfigMixin):
     def lock_layers_dtypes(self, hybrid_dtype = None, dtype = torch.float32):
         layer_list = [self.head, self.head.head, self.patch_embedding]
         target_dype= dtype
-        
-        layer_list2 = [ self.time_embedding, self.time_embedding[0], self.time_embedding[2], 
+
+        layer_list2 = [ self.time_embedding, self.time_embedding[0], self.time_embedding[2],
                     self.time_projection, self.time_projection[1]] #, self.text_embedding, self.text_embedding[0], self.text_embedding[2] ]
 
         for block in self.blocks:
@@ -832,7 +829,7 @@ class WanModel(ModelMixin, ConfigMixin):
             for block in self.vace_blocks:
                 layer_list2 += [block.after_proj, block.norm3]
 
-        target_dype2 = hybrid_dtype if hybrid_dtype != None else dtype 
+        target_dype2 = hybrid_dtype if hybrid_dtype != None else dtype
 
         # cam master
         if hasattr(self.blocks[0], "projector"):
@@ -851,13 +848,13 @@ class WanModel(ModelMixin, ConfigMixin):
         self._lock_dtype = dtype
 
 
-    def compute_teacache_threshold(self, start_step, timesteps = None, speed_factor =0): 
+    def compute_teacache_threshold(self, start_step, timesteps = None, speed_factor =0):
         modulation_dtype = self.time_projection[1].weight.dtype
         rescale_func = np.poly1d(self.coefficients)
         e_list = []
         for t in timesteps:
             t = torch.stack([t])
-            time_emb =  self.time_embedding( sinusoidal_embedding_1d(self.freq_dim, t.flatten()).to(modulation_dtype) )  # b, dim   
+            time_emb =  self.time_embedding( sinusoidal_embedding_1d(self.freq_dim, t.flatten()).to(modulation_dtype) )  # b, dim
             e_list.append(time_emb)
         best_deltas = None
         best_threshold = 0.01
@@ -871,7 +868,7 @@ class WanModel(ModelMixin, ConfigMixin):
             diff = 1000
             deltas = []
             for i, t in enumerate(timesteps):
-                skip = False    
+                skip = False
                 if not (i<=start_step or i== len(timesteps)-1):
                     delta = abs(rescale_func(((e_list[i]-e_list[i-1]).abs().mean() / e_list[i-1].abs().mean()).cpu().item()))
                     # deltas.append(delta)
@@ -883,8 +880,8 @@ class WanModel(ModelMixin, ConfigMixin):
                         accumulated_rel_l1_distance = 0
                 if not skip:
                     nb_steps += 1
-                    signed_diff = target_nb_steps - nb_steps               
-                    diff = abs(signed_diff)  
+                    signed_diff = target_nb_steps - nb_steps
+                    diff = abs(signed_diff)
             if diff < best_diff:
                 best_threshold = threshold
                 best_deltas = deltas
@@ -898,21 +895,21 @@ class WanModel(ModelMixin, ConfigMixin):
         # print(f"deltas:{best_deltas}")
         return best_threshold
 
-    
+
     def forward(
         self,
         x,
         t,
         context,
         vace_context = None,
-        vace_context_scale=1.0,        
+        vace_context_scale=1.0,
         clip_fea=None,
         y=None,
         freqs = None,
         pipeline = None,
         current_step = 0,
         x_id= 0,
-        max_steps = 0, 
+        max_steps = 0,
         slg_layers=None,
         callback = None,
         cam_emb: torch.Tensor = None,
@@ -944,7 +941,7 @@ class WanModel(ModelMixin, ConfigMixin):
                 x_list[i] = x_list[0].clone()
                 last_x_idx = i
             else:
-                # image source                
+                # image source
                 if y is not None:
                     x = torch.cat([x, y], dim=0)
                 # embeddings
@@ -970,35 +967,35 @@ class WanModel(ModelMixin, ConfigMixin):
             block_mask = causal_mask.unsqueeze(0).unsqueeze(0)
             del causal_mask
 
-        offload.shared_state["embed_sizes"] = grid_sizes 
-        offload.shared_state["step_no"] = current_step 
+        offload.shared_state["embed_sizes"] = grid_sizes
+        offload.shared_state["step_no"] = current_step
         offload.shared_state["max_steps"] = max_steps
 
         _flag_df = t.dim() == 2
 
         e = self.time_embedding(
             sinusoidal_embedding_1d(self.freq_dim, t.flatten()).to(modulation_dtype)  # self.patch_embedding.weight.dtype)
-        )  # b, dim        
+        )  # b, dim
         e0 = self.time_projection(e).unflatten(1, (6, self.dim)).to(e.dtype)
 
         if self.inject_sample_info:
             fps = torch.tensor(fps, dtype=torch.long, device=device)
 
-            fps_emb = self.fps_embedding(fps).to(e.dtype) 
+            fps_emb = self.fps_embedding(fps).to(e.dtype)
             if _flag_df:
                 e0 = e0 + self.fps_projection(fps_emb).unflatten(1, (6, self.dim)).repeat(t.shape[1], 1, 1)
             else:
                 e0 = e0 + self.fps_projection(fps_emb).unflatten(1, (6, self.dim))
 
         # context
-        context = [self.text_embedding( torch.cat( [u, u.new_zeros(self.text_len - u.size(0), u.size(1))] ).unsqueeze(0) ) for u in context  ] 
-        
+        context = [self.text_embedding( torch.cat( [u, u.new_zeros(self.text_len - u.size(0), u.size(1))] ).unsqueeze(0) ) for u in context  ]
+
         if clip_fea is not None:
             context_clip = self.img_emb(clip_fea)  # bs x 257 x dim
-            context = [ torch.cat( [context_clip, u ], dim=1 ) for u in context  ] 
+            context = [ torch.cat( [context_clip, u ], dim=1 ) for u in context  ]
 
         context_list = context
-        if audio_scale != None: 
+        if audio_scale != None:
             audio_scale_list = audio_scale
         else:
             audio_scale_list = [None] * len(x_list)
@@ -1021,13 +1018,13 @@ class WanModel(ModelMixin, ConfigMixin):
             c = [self.vace_patch_embedding(u.to(self.vace_patch_embedding.weight.dtype).unsqueeze(0)) for u in vace_context]
             c = [u.flatten(2).transpose(1, 2) for u in c]
             c = c[0]
- 
+
             kwargs['context_scale'] = vace_context_scale
-            hints_list = [ [c] for _ in range(len(x_list)) ] 
+            hints_list = [ [c] for _ in range(len(x_list)) ]
             del c
 
         should_calc = True
-        if self.enable_teacache: 
+        if self.enable_teacache:
             if x_id != 0:
                 should_calc = self.should_calc
             else:
@@ -1045,8 +1042,8 @@ class WanModel(ModelMixin, ConfigMixin):
                     else:
                         should_calc = True
                         self.accumulated_rel_l1_distance = 0
-                self.previous_modulated_input = e 
-                self.should_calc = should_calc                        
+                self.previous_modulated_input = e
+                self.should_calc = should_calc
 
         if not should_calc:
             if joint_pass:
@@ -1065,8 +1062,8 @@ class WanModel(ModelMixin, ConfigMixin):
                 ori_hidden_states = [ None ] * len(x_list)
                 ori_hidden_states[0] = x_list[0].clone()
                 for i in range(1, len(x_list)):
-                    ori_hidden_states[i] = ori_hidden_states[0] if is_source_x[i] else x_list[i].clone()  
-            
+                    ori_hidden_states[i] = ori_hidden_states[0] if is_source_x[i] else x_list[i].clone()
+
             for block_idx, block in enumerate(self.blocks):
                 offload.shared_state["layer"] = block_idx
                 if callback != None:
@@ -1087,11 +1084,11 @@ class WanModel(ModelMixin, ConfigMixin):
             if self.enable_teacache:
                 if joint_pass:
                     for i, (x, ori, is_source) in enumerate(zip(x_list, ori_hidden_states, is_source_x)) :
-                        if i == 0 or is_source and i != last_x_idx  :
-                            self.previous_residual[i] = torch.sub(x, ori) 
+                        if i == 0 or (is_source and i != last_x_idx)  :
+                            self.previous_residual[i] = torch.sub(x, ori)
                         else:
                             self.previous_residual[i] = ori
-                            torch.sub(x, ori, out=self.previous_residual[i]) 
+                            torch.sub(x, ori, out=self.previous_residual[i])
                         ori_hidden_states[i] = None
                         x , ori = None, None
                 else:
@@ -1111,8 +1108,7 @@ class WanModel(ModelMixin, ConfigMixin):
         return [x[0].float() for x in x_list]
 
     def unpatchify(self, x, grid_sizes):
-        r"""
-        Reconstruct video tensors from patch embeddings.
+        r"""Reconstruct video tensors from patch embeddings.
 
         Args:
             x (List[Tensor]):
@@ -1124,8 +1120,8 @@ class WanModel(ModelMixin, ConfigMixin):
         Returns:
             List[Tensor]:
                 Reconstructed video tensors with shape [C_out, F, H / 8, W / 8]
-        """
 
+        """
         c = self.out_dim
         out = []
         for u in x:
@@ -1136,10 +1132,8 @@ class WanModel(ModelMixin, ConfigMixin):
         return out
 
     def init_weights(self):
-        r"""
-        Initialize model parameters using Xavier initialization.
+        r"""Initialize model parameters using Xavier initialization.
         """
-
         # basic init
         for m in self.modules():
             if isinstance(m, nn.Linear):

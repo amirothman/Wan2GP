@@ -69,8 +69,7 @@ class HuggingfaceTokenizer:
         # output
         if return_mask:
             return ids.input_ids, ids.attention_mask
-        else:
-            return ids.input_ids
+        return ids.input_ids
 
     def _clean(self, text):
         if self.clean == 'whitespace':

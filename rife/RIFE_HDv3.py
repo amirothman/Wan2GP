@@ -1,16 +1,13 @@
+
 import torch
-import torch.nn as nn
-import numpy as np
-from torch.optim import AdamW
-import torch.optim as optim
-import itertools
 from torch.nn.parallel import DistributedDataParallel as DDP
+
 from .IFNet_HDv3 import *
-import torch.nn.functional as F
+
 # from ..model.loss import *
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
 class Model:
     def __init__(self, local_rank=-1):
         self.flownet = IFNet()
@@ -32,7 +29,7 @@ class Model:
         self.flownet.to(device)
 
     def load_model(self, path, rank=0, device = "cuda"):
-        self.device = device 
+        self.device = device
         def convert(param):
             if rank == -1:
                 return {
@@ -40,20 +37,19 @@ class Model:
                     for k, v in param.items()
                     if "module." in k
                 }
-            else:
-                return param
+            return param
         self.flownet.load_state_dict(convert(torch.load(path, map_location=device)))
-        
+
     def save_model(self, path, rank=0):
         if rank == 0:
-            torch.save(self.flownet.state_dict(),'{}/flownet.pkl'.format(path))
+            torch.save(self.flownet.state_dict(),f'{path}/flownet.pkl')
 
     def inference(self, img0, img1, scale=1.0):
         imgs = torch.cat((img0, img1), 1)
         scale_list = [4/scale, 2/scale, 1/scale]
         flow, mask, merged = self.flownet(imgs, scale_list)
         return merged[2]
-    
+
     def update(self, imgs, gt, learning_rate=0, mul=1, training=True, flow_gt=None):
         for param_group in self.optimG.param_groups:
             param_group['lr'] = learning_rate

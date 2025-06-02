@@ -1,6 +1,7 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
+
 from wan.modules.attention import pay_attention
 
 
@@ -15,7 +16,7 @@ class AudioProjModel(nn.Module):
         context_tokens = self.proj(audio_embeds)
         context_tokens = self.norm(context_tokens)
         return context_tokens  # [B,L,C]
- 
+
 class WanCrossAttentionProcessor(nn.Module):
     def __init__(self, context_dim, hidden_dim):
         super().__init__()
@@ -36,8 +37,7 @@ class WanCrossAttentionProcessor(nn.Module):
         latents_num_frames: int = 21,
         audio_context_lens = None
     ) -> torch.Tensor:
-        """
-        audio_proj:   [B, 21, L3, C]
+        """audio_proj:   [B, 21, L3, C]
         audio_context_lens: [B*21].
         """
         b, l, n, d = q.shape
@@ -69,8 +69,7 @@ class FantasyTalkingAudioConditionModel(nn.Module):
         self.audio_proj_dim = audio_proj_dim
 
     def split_audio_sequence(self, audio_proj_length, num_frames=81):
-        """
-        Map the audio feature sequence to corresponding latent frame slices.
+        """Map the audio feature sequence to corresponding latent frame slices.
 
         Args:
             audio_proj_length (int): The total length of the audio feature sequence
@@ -80,6 +79,7 @@ class FantasyTalkingAudioConditionModel(nn.Module):
         Returns:
             list: A list of [start_idx, end_idx] pairs. Each pair represents the index range
                 (within the audio feature sequence) corresponding to a latent frame.
+
         """
         # Average number of tokens per original video frame
         tokens_per_frame = audio_proj_length / num_frames
@@ -110,8 +110,7 @@ class FantasyTalkingAudioConditionModel(nn.Module):
         return pos_idx_ranges
 
     def split_tensor_with_padding(self, input_tensor, pos_idx_ranges, expand_length=0):
-        """
-        Split the input tensor into subsequences based on index ranges, and apply right-side zero-padding
+        """Split the input tensor into subsequences based on index ranges, and apply right-side zero-padding
         if the range exceeds the input boundaries.
 
         Args:
@@ -124,6 +123,7 @@ class FantasyTalkingAudioConditionModel(nn.Module):
                                     Each element is a padded subsequence.
             k_lens (Tensor): A tensor of shape [F], representing the actual (unpadded) length of each subsequence.
                             Useful for ignoring padding tokens in attention masks.
+
         """
         pos_idx_ranges = [
             [idx[0] - expand_length, idx[1] + expand_length] for idx in pos_idx_ranges

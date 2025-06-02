@@ -1,10 +1,11 @@
-import torch
-from typing import Union, Tuple, List, Optional
+from typing import List, Optional, Tuple, Union
+
 import numpy as np
+import torch
 
 
 ###### Thanks to the RifleX project (https://github.com/thu-ml/RIFLEx/) for this alternative pos embed for long videos
-#  
+#
 def get_1d_rotary_pos_embed_riflex(
     dim: int,
     pos: Union[np.ndarray, int],
@@ -13,8 +14,7 @@ def get_1d_rotary_pos_embed_riflex(
     k: Optional[int] = None,
     L_test: Optional[int] = None,
 ):
-    """
-    RIFLEx: Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
+    """RIFLEx: Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
 
     This function calculates a frequency tensor with complex exponentials using the given dimension 'dim' and the end
     index 'end'. The 'theta' parameter scales the frequencies. The returned tensor contains complex values in complex64
@@ -31,6 +31,7 @@ def get_1d_rotary_pos_embed_riflex(
         L_test (`int`, *optional*, defaults to None): the number of frames for inference
     Returns:
         `torch.Tensor`: Precomputed frequency tensor with complex exponentials. [S, D/2]
+
     """
     assert dim % 2 == 0
 
@@ -56,14 +57,12 @@ def get_1d_rotary_pos_embed_riflex(
         freqs_cos = freqs.cos().repeat_interleave(2, dim=1).float()  # [S, D]
         freqs_sin = freqs.sin().repeat_interleave(2, dim=1).float()  # [S, D]
         return freqs_cos, freqs_sin
-    else:
-        # lumina
-        freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64     # [S, D/2]
-        return freqs_cis
+    # lumina
+    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64     # [S, D/2]
+    return freqs_cis
 
 def identify_k( b: float, d: int, N: int):
-    """
-    This function identifies the index of the intrinsic frequency component in a RoPE-based pre-trained diffusion transformer.
+    """This function identifies the index of the intrinsic frequency component in a RoPE-based pre-trained diffusion transformer.
 
     Args:
         b (`float`): The base frequency for RoPE.
@@ -76,8 +75,8 @@ def identify_k( b: float, d: int, N: int):
         In HunyuanVideo, b=256 and d=16, the repetition occurs approximately 8s (N=48 in latent space).
         k, N_k = identify_k(b=256, d=16, N=48)
         In this case, the intrinsic frequency index k is 4, and the period N_k is 50.
-    """
 
+    """
     # Compute the period of each frequency in RoPE according to Eq.(4)
     periods = []
     for j in range(1, d // 2 + 1):
@@ -94,15 +93,13 @@ def identify_k( b: float, d: int, N: int):
 def _to_tuple(x, dim=2):
     if isinstance(x, int):
         return (x,) * dim
-    elif len(x) == dim:
+    if len(x) == dim:
         return x
-    else:
-        raise ValueError(f"Expected length {dim} or int, but got {x}")
+    raise ValueError(f"Expected length {dim} or int, but got {x}")
 
 
 def get_meshgrid_nd(start, *args, dim=2):
-    """
-    Get n-D meshgrid with start, stop and num.
+    """Get n-D meshgrid with start, stop and num.
 
     Args:
         start (int or tuple): If len(args) == 0, start is num; If len(args) == 1, start is start, args[0] is stop,
@@ -114,6 +111,7 @@ def get_meshgrid_nd(start, *args, dim=2):
 
     Returns:
         grid (np.ndarray): [dim, ...]
+
     """
     if len(args) == 0:
         # start is grid_size
@@ -156,8 +154,7 @@ def reshape_for_broadcast(
     x: torch.Tensor,
     head_first=False,
 ):
-    """
-    Reshape frequency tensor for broadcasting it with another tensor.
+    """Reshape frequency tensor for broadcasting it with another tensor.
 
     This function reshapes the frequency tensor to have the same shape as the target tensor 'x'
     for the purpose of broadcasting the frequency tensor during element-wise operations.
@@ -177,6 +174,7 @@ def reshape_for_broadcast(
     Raises:
         AssertionError: If the frequency tensor doesn't match the expected shape.
         AssertionError: If the target tensor 'x' doesn't have the expected number of dimensions.
+
     """
     ndim = x.ndim
     assert 0 <= 1 < ndim
@@ -199,24 +197,23 @@ def reshape_for_broadcast(
             ), f"freqs_cis shape {freqs_cis[0].shape} does not match x shape {x.shape}"
             shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
         return freqs_cis[0].view(*shape), freqs_cis[1].view(*shape)
+    # freqs_cis: values in complex space
+    if head_first:
+        assert freqs_cis.shape == (
+            x.shape[-2],
+            x.shape[-1],
+        ), f"freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}"
+        shape = [
+            d if i == ndim - 2 or i == ndim - 1 else 1
+            for i, d in enumerate(x.shape)
+        ]
     else:
-        # freqs_cis: values in complex space
-        if head_first:
-            assert freqs_cis.shape == (
-                x.shape[-2],
-                x.shape[-1],
-            ), f"freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}"
-            shape = [
-                d if i == ndim - 2 or i == ndim - 1 else 1
-                for i, d in enumerate(x.shape)
-            ]
-        else:
-            assert freqs_cis.shape == (
-                x.shape[1],
-                x.shape[-1],
-            ), f"freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}"
-            shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
-        return freqs_cis.view(*shape)
+        assert freqs_cis.shape == (
+            x.shape[1],
+            x.shape[-1],
+        ), f"freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}"
+        shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
+    return freqs_cis.view(*shape)
 
 
 def rotate_half(x):
@@ -230,8 +227,7 @@ def apply_rotary_emb( qklist,
     freqs_cis: Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]],
     head_first: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Apply rotary embeddings to input tensors using the given frequency tensor.
+    """Apply rotary embeddings to input tensors using the given frequency tensor.
 
     This function applies rotary embeddings to the given query 'xq' and key 'xk' tensors using the provided
     frequency tensor 'freqs_cis'. The input tensors are reshaped as complex numbers, and the frequency tensor
@@ -258,7 +254,7 @@ def apply_rotary_emb( qklist,
         # imag * cos + real * sin
         xq_dtype = xq.dtype
         xq_out = xq.to(torch.float)
-        xq = None        
+        xq = None
         xq_rot = rotate_half(xq_out)
         xq_out *= cos
         xq_rot *= sin
@@ -292,7 +288,7 @@ def apply_rotary_emb( qklist,
 
     return xq_out, xk_out
 
-def get_nd_rotary_pos_embed_new(rope_dim_list, start, *args, theta=10000., use_real=False, 
+def get_nd_rotary_pos_embed_new(rope_dim_list, start, *args, theta=10000., use_real=False,
                             theta_rescale_factor: Union[float, List[float]]=1.0,
                             interpolation_factor: Union[float, List[float]]=1.0,
                             concat_dict={}
@@ -301,17 +297,16 @@ def get_nd_rotary_pos_embed_new(rope_dim_list, start, *args, theta=10000., use_r
     grid = get_meshgrid_nd(start, *args, dim=len(rope_dim_list))   # [3, W, H, D] / [2, W, H]
     if len(concat_dict)<1:
         pass
-    else:
-        if concat_dict['mode']=='timecat':
-            bias = grid[:,:1].clone()
-            bias[0] = concat_dict['bias']*torch.ones_like(bias[0])
-            grid = torch.cat([bias, grid], dim=1)
-            
-        elif concat_dict['mode']=='timecat-w': 
-            bias = grid[:,:1].clone()
-            bias[0] = concat_dict['bias']*torch.ones_like(bias[0])
-            bias[2] += start[-1]    ## ref https://github.com/Yuanshi9815/OminiControl/blob/main/src/generate.py#L178
-            grid = torch.cat([bias, grid], dim=1)
+    elif concat_dict['mode']=='timecat':
+        bias = grid[:,:1].clone()
+        bias[0] = concat_dict['bias']*torch.ones_like(bias[0])
+        grid = torch.cat([bias, grid], dim=1)
+
+    elif concat_dict['mode']=='timecat-w':
+        bias = grid[:,:1].clone()
+        bias[0] = concat_dict['bias']*torch.ones_like(bias[0])
+        bias[2] += start[-1]    ## ref https://github.com/Yuanshi9815/OminiControl/blob/main/src/generate.py#L178
+        grid = torch.cat([bias, grid], dim=1)
     if isinstance(theta_rescale_factor, int) or isinstance(theta_rescale_factor, float):
         theta_rescale_factor = [theta_rescale_factor] * len(rope_dim_list)
     elif isinstance(theta_rescale_factor, list) and len(theta_rescale_factor) == 1:
@@ -330,17 +325,16 @@ def get_nd_rotary_pos_embed_new(rope_dim_list, start, *args, theta=10000., use_r
         emb = get_1d_rotary_pos_embed(rope_dim_list[i], grid[i].reshape(-1), theta, use_real=use_real,
                                       theta_rescale_factor=theta_rescale_factor[i],
                                       interpolation_factor=interpolation_factor[i])    # 2 x [WHD, rope_dim_list[i]]
-        
+
         embs.append(emb)
 
     if use_real:
         cos = torch.cat([emb[0] for emb in embs], dim=1)    # (WHD, D/2)
         sin = torch.cat([emb[1] for emb in embs], dim=1)    # (WHD, D/2)
         return cos, sin
-    else:
-        emb = torch.cat(embs, dim=1)    # (WHD, D/2)
-        return emb
-    
+    emb = torch.cat(embs, dim=1)    # (WHD, D/2)
+    return emb
+
 def get_nd_rotary_pos_embed(
     rope_dim_list,
     start,
@@ -353,8 +347,7 @@ def get_nd_rotary_pos_embed(
     L_test = 66,
     enable_riflex = True
 ):
-    """
-    This is a n-d version of precompute_freqs_cis, which is a RoPE for tokens with n-d structure.
+    """This is a n-d version of precompute_freqs_cis, which is a RoPE for tokens with n-d structure.
 
     Args:
         rope_dim_list (list of int): Dimension of each rope. len(rope_dim_list) should equal to n.
@@ -370,8 +363,8 @@ def get_nd_rotary_pos_embed(
 
     Returns:
         pos_embed (torch.Tensor): [HW, D/2]
-    """
 
+    """
     grid = get_meshgrid_nd(
         start, *args, dim=len(rope_dim_list)
     )  # [3, W, H, D] / [2, W, H]
@@ -411,16 +404,15 @@ def get_nd_rotary_pos_embed(
             emb = get_1d_rotary_pos_embed_riflex(rope_dim_list[i], grid[i].reshape(-1), theta, use_real=True, k=k, L_test=L_test)
         # === RIFLEx modification end ===
         else:
-            emb = get_1d_rotary_pos_embed(rope_dim_list[i], grid[i].reshape(-1), theta, use_real=True, theta_rescale_factor=theta_rescale_factor[i],interpolation_factor=interpolation_factor[i],)
+            emb = get_1d_rotary_pos_embed(rope_dim_list[i], grid[i].reshape(-1), theta, use_real=True, theta_rescale_factor=theta_rescale_factor[i],interpolation_factor=interpolation_factor[i])
         embs.append(emb)
 
     if use_real:
         cos = torch.cat([emb[0] for emb in embs], dim=1)  # (WHD, D/2)
         sin = torch.cat([emb[1] for emb in embs], dim=1)  # (WHD, D/2)
         return cos, sin
-    else:
-        emb = torch.cat(embs, dim=1)  # (WHD, D/2)
-        return emb
+    emb = torch.cat(embs, dim=1)  # (WHD, D/2)
+    return emb
 
 
 def get_1d_rotary_pos_embed(
@@ -431,8 +423,7 @@ def get_1d_rotary_pos_embed(
     theta_rescale_factor: float = 1.0,
     interpolation_factor: float = 1.0,
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-    """
-    Precompute the frequency tensor for complex exponential (cis) with given dimensions.
+    """Precompute the frequency tensor for complex exponential (cis) with given dimensions.
     (Note: `cis` means `cos + i * sin`, where i is the imaginary unit.)
 
     This function calculates a frequency tensor with complex exponential using the given dimension 'dim'
@@ -450,6 +441,7 @@ def get_1d_rotary_pos_embed(
     Returns:
         freqs_cis: Precomputed frequency tensor with complex exponential. [S, D/2]
         freqs_cos, freqs_sin: Precomputed frequency tensor with real and imaginary parts separately. [S, D]
+
     """
     if isinstance(pos, int):
         pos = torch.arange(pos).float()
@@ -468,8 +460,7 @@ def get_1d_rotary_pos_embed(
         freqs_cos = freqs.cos().repeat_interleave(2, dim=1)  # [S, D]
         freqs_sin = freqs.sin().repeat_interleave(2, dim=1)  # [S, D]
         return freqs_cos, freqs_sin
-    else:
-        freqs_cis = torch.polar(
-            torch.ones_like(freqs), freqs
-        )  # complex64     # [S, D/2]
-        return freqs_cis
+    freqs_cis = torch.polar(
+        torch.ones_like(freqs), freqs
+    )  # complex64     # [S, D/2]
+    return freqs_cis

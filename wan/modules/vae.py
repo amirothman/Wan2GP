@@ -1,11 +1,11 @@
 # Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
 import logging
-from mmgp import offload
+
 import torch
-import torch.cuda.amp as amp
-import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+from mmgp import offload
+from torch import nn
 
 __all__ = [
     'WanVAE',
@@ -15,8 +15,7 @@ CACHE_T = 2
 
 
 class CausalConv3d(nn.Conv3d):
-    """
-    Causal 3d convolusion.
+    """Causal 3d convolusion.
     """
 
     def __init__(self, *args, **kwargs):
@@ -56,13 +55,12 @@ class RMS_norm(nn.Module):
             x, dim=(1 if self.channel_first else
                     -1)) * self.scale * self.gamma + self.bias
         x = x.to(dtype)
-        return x 
+        return x
 
 class Upsample(nn.Upsample):
 
     def forward(self, x):
-        """
-        Fix bfloat16 support for nearest neighbor interpolation.
+        """Fix bfloat16 support for nearest neighbor interpolation.
         """
         return super().forward(x.float()).type_as(x)
 
@@ -230,8 +228,7 @@ class ResidualBlock(nn.Module):
 
 
 class AttentionBlock(nn.Module):
-    """
-    Causal self-attention with a single head.
+    """Causal self-attention with a single head.
     """
 
     def __init__(self, dim):
@@ -607,7 +604,7 @@ class WanVAE_(nn.Module):
         self.clear_cache()
         out = torch.cat(out_list, 2)
         return out
-    
+
     def blend_v(self, a: torch.Tensor, b: torch.Tensor, blend_extent: int) -> torch.Tensor:
         blend_extent = min(a.shape[-2], b.shape[-2], blend_extent)
         for y in range(blend_extent):
@@ -619,7 +616,7 @@ class WanVAE_(nn.Module):
         for x in range(blend_extent):
             b[:, :, :, :, x] = a[:, :, :, :, -blend_extent + x] * (1 - x / blend_extent) + b[:, :, :, :, x] * (x / blend_extent)
         return b
-    
+
     def spatial_tiled_decode(self, z, scale, tile_size, any_end_frame= False):
         tile_sample_min_size = tile_size
         tile_latent_min_size = int(tile_sample_min_size / 8)
@@ -729,8 +726,7 @@ class WanVAE_(nn.Module):
 
 
 def _video_vae(pretrained_path=None, z_dim=None, device='cpu', **kwargs):
-    """
-    Autoencoder3d adapted from Stable Diffusion 1.x, 2.x and XL.
+    """Autoencoder3d adapted from Stable Diffusion 1.x, 2.x and XL.
     """
     # params
     cfg = dict(
@@ -747,13 +743,12 @@ def _video_vae(pretrained_path=None, z_dim=None, device='cpu', **kwargs):
     with torch.device('meta'):
         model = WanVAE_(**cfg)
 
-    from mmgp import offload
     # load checkpoint
     logging.info(f'loading {pretrained_path}')
     # model.load_state_dict(
     #     torch.load(pretrained_path, map_location=device), assign=True)
-    # offload.load_model_data(model, pretrained_path.replace(".pth", "_bf16.safetensors"), writable_tensors= False)    
-    offload.load_model_data(model, pretrained_path.replace(".pth", ".safetensors"), writable_tensors= False)    
+    # offload.load_model_data(model, pretrained_path.replace(".pth", "_bf16.safetensors"), writable_tensors= False)
+    offload.load_model_data(model, pretrained_path.replace(".pth", ".safetensors"), writable_tensors= False)
     return model
 
 
@@ -793,37 +788,34 @@ class WanVAE:
             if mixed_precision:
                 device_mem_capacity = device_mem_capacity / 2
             if device_mem_capacity >= 24000:
-                use_vae_config = 1            
+                use_vae_config = 1
             elif device_mem_capacity >= 8000:
                 use_vae_config = 2
-            else:          
+            else:
                 use_vae_config = 3
         else:
             use_vae_config = vae_config
 
         if use_vae_config == 1:
-            VAE_tile_size = 0  
+            VAE_tile_size = 0
         elif use_vae_config == 2:
-            VAE_tile_size = 256  
-        else: 
-            VAE_tile_size = 128  
+            VAE_tile_size = 256
+        else:
+            VAE_tile_size = 128
 
         return  VAE_tile_size
 
     def encode(self, videos, tile_size = 256, any_end_frame = False):
-        """
-        videos: A list of videos each with shape [C, T, H, W].
+        """videos: A list of videos each with shape [C, T, H, W].
         """
         original_dtype = videos[0].dtype
-        
+
         if tile_size > 0:
             return [ self.model.spatial_tiled_encode(u.to(self.dtype).unsqueeze(0), self.scale, tile_size, any_end_frame=any_end_frame).float().squeeze(0) for u in videos ]
-        else:
-            return [ self.model.encode(u.to(self.dtype).unsqueeze(0), self.scale, any_end_frame=any_end_frame).float().squeeze(0) for u in videos ]
+        return [ self.model.encode(u.to(self.dtype).unsqueeze(0), self.scale, any_end_frame=any_end_frame).float().squeeze(0) for u in videos ]
 
 
     def decode(self, zs, tile_size, any_end_frame = False):
         if tile_size > 0:
             return [ self.model.spatial_tiled_decode(u.to(self.dtype).unsqueeze(0), self.scale, tile_size, any_end_frame=any_end_frame).clamp_(-1, 1).float().squeeze(0) for u in zs ]
-        else:
-            return [ self.model.decode(u.to(self.dtype).unsqueeze(0), self.scale, any_end_frame=any_end_frame).clamp_(-1, 1).float().squeeze(0) for u in zs ]
+        return [ self.model.decode(u.to(self.dtype).unsqueeze(0), self.scale, any_end_frame=any_end_frame).clamp_(-1, 1).float().squeeze(0) for u in zs ]

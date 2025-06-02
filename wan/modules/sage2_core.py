@@ -1,5 +1,4 @@
-"""
-Copyright (c) 2024 by SageAttention team.
+"""Copyright (c) 2024 by SageAttention team.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,16 +14,19 @@ limitations under the License.
 """
 
 import torch
-import torch.nn.functional as F
-
-from sageattention.triton.quant_per_block import per_block_int8 as per_block_int8_triton
-from sageattention.triton.quant_per_block_varlen import per_block_int8 as per_block_int8_varlen_triton
+from sageattention.triton.attn_qk_int8_block_varlen import forward as attn_false_varlen
 from sageattention.triton.attn_qk_int8_per_block import forward as attn_false
 from sageattention.triton.attn_qk_int8_per_block_causal import forward as attn_true
-from sageattention.triton.attn_qk_int8_block_varlen import forward as attn_false_varlen
-from sageattention.triton.attn_qk_int8_per_block_causal_varlen import forward as attn_true_varlen
-
-from sageattention.triton.quant_per_thread import per_thread_int8 as per_thread_int8_triton
+from sageattention.triton.attn_qk_int8_per_block_causal_varlen import (
+    forward as attn_true_varlen,
+)
+from sageattention.triton.quant_per_block import per_block_int8 as per_block_int8_triton
+from sageattention.triton.quant_per_block_varlen import (
+    per_block_int8 as per_block_int8_varlen_triton,
+)
+from sageattention.triton.quant_per_thread import (
+    per_thread_int8 as per_thread_int8_triton,
+)
 
 try:
     from sageattention import _qattn_sm80
@@ -44,14 +46,16 @@ try:
 except:
     SM90_ENABLED = False
 
-from sageattention.quant import per_block_int8 as per_block_int8_cuda
-from sageattention.quant import per_warp_int8 as per_warp_int8_cuda
-from sageattention.quant import sub_mean
-from sageattention.quant import per_channel_fp8
-
-from typing import Any, List, Literal, Optional, Tuple, Union
 import warnings
-import os
+from typing import Any, Optional
+
+from sageattention.quant import (
+    per_block_int8 as per_block_int8_cuda,
+    per_channel_fp8,
+    per_warp_int8 as per_warp_int8_cuda,
+    sub_mean,
+)
+
 
 def is_sage2_supported():
     device_count = torch.cuda.device_count()
@@ -76,8 +80,7 @@ def sageattn(
     return_lse: bool = False,
     **kwargs: Any,
 ):
-    """
-    Automatically selects the appropriate implementation of the SageAttention kernel based on the GPU compute capability.
+    """Automatically selects the appropriate implementation of the SageAttention kernel based on the GPU compute capability.
 
     Parameters
     ----------
@@ -128,38 +131,36 @@ def sageattn(
     - ``num_qo_heads`` must be divisible by ``num_kv_heads``.
     - The tensors `q`, `k`, and `v` must have the dtype ``torch.float16`` or ``torch.bfloat16``
     - All tensors must be on the same cuda device.
+
     """
-        
     arch = get_cuda_arch_versions()[qkv_list[0].device.index]
     if arch == "sm80":
         return sageattn_qk_int8_pv_fp16_cuda(qkv_list, tensor_layout=tensor_layout, is_causal=is_causal, sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32")
-    elif arch == "sm86":
+    if arch == "sm86":
         return sageattn_qk_int8_pv_fp16_triton(qkv_list, tensor_layout=tensor_layout, is_causal=is_causal, sm_scale=sm_scale, return_lse=return_lse)
-    elif arch == "sm89":
+    if arch == "sm89":
         return sageattn_qk_int8_pv_fp8_cuda(qkv_list, tensor_layout=tensor_layout, is_causal=is_causal, sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32+fp32")
-    elif arch == "sm90":
+    if arch == "sm90":
         return sageattn_qk_int8_pv_fp8_cuda_sm90(qkv_list, tensor_layout=tensor_layout, is_causal=is_causal, sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32+fp32")
-    elif arch == "sm120":
+    if arch == "sm120":
         return sageattn_qk_int8_pv_fp8_cuda(qkv_list, tensor_layout=tensor_layout, is_causal=is_causal, qk_quant_gran="per_warp", sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32", smooth_v= True) # sm120 has accurate fp32 accumulator for fp8 mma and triton kernel is currently not usable on sm120.
-    else:
-        raise ValueError(f"Unsupported CUDA architecture: {arch}")
+    raise ValueError(f"Unsupported CUDA architecture: {arch}")
 
 @torch.compiler.disable
 def sageattn_qk_int8_pv_fp16_triton(
     qkv_list,
-    # q: torch.Tensor, 
-    # k: torch.Tensor, 
-    # v: torch.Tensor, 
+    # q: torch.Tensor,
+    # k: torch.Tensor,
+    # v: torch.Tensor,
     tensor_layout: str = "HND",
     quantization_backend: str = "triton",
-    is_causal: bool =False, 
-    sm_scale: Optional[float] = None, 
+    is_causal: bool =False,
+    sm_scale: Optional[float] = None,
     smooth_k: bool = True,
     return_lse: bool = False,
     **kwargs: Any,
 ) -> torch.Tensor:
-    """
-    SageAttention with per-block INT8 quantization for Q and K, FP16 PV with FP16 accumulation, implemented using Triton.
+    """SageAttention with per-block INT8 quantization for Q and K, FP16 PV with FP16 accumulation, implemented using Triton.
     The FP16 accumulator is added to a FP32 buffer immediately after each iteration.
 
     Parameters
@@ -220,6 +221,7 @@ def sageattn_qk_int8_pv_fp16_triton(
     - The tensors `q`, `k`, and `v` must have the dtype ``torch.float16``, ``torch.bfloat16`` or ``torch.float32``.
     - All tensors must be on the same cuda device.
     - `smooth_k` will introduce slight overhead but will improve the accuracy under most circumstances.
+
     """
     q, k, v = qkv_list
     qkv_list.clear()
@@ -229,9 +231,9 @@ def sageattn_qk_int8_pv_fp16_triton(
     assert q.device == k.device == v.device, "All tensors must be on the same device."
     assert q.dtype == k.dtype == v.dtype, "All tensors must have the same dtype."
 
-    # FIXME(DefTruth): make sage attention work compatible with distributed 
-    # env, for example, xDiT which launch by torchrun. Without this workaround, 
-    # sage attention will run into illegal memory access error after first 
+    # FIXME(DefTruth): make sage attention work compatible with distributed
+    # env, for example, xDiT which launch by torchrun. Without this workaround,
+    # sage attention will run into illegal memory access error after first
     # inference step in distributed env for multi gpus inference. This small
     # workaround also make sage attention work compatible with torch.compile
     # through non-fullgraph compile mode.
@@ -288,26 +290,23 @@ def sageattn_qk_int8_pv_fp16_triton(
 
     if return_lse:
         return o, lse / 1.44269504 + lse_correction * sm_scale if smooth_k else lse / 1.44269504
-    else:
-        return o
+    return o
 
 @torch.compiler.disable
 def sageattn_varlen(
-    q: torch.Tensor, 
-    k: torch.Tensor, 
-    v: torch.Tensor, 
-    cu_seqlens_q: torch.Tensor, 
-    cu_seqlens_k: torch.Tensor, 
-    max_seqlen_q: int, 
-    max_seqlen_k: int, 
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    cu_seqlens_q: torch.Tensor,
+    cu_seqlens_k: torch.Tensor,
+    max_seqlen_q: int,
+    max_seqlen_k: int,
     is_causal: bool = False,
-    sm_scale: Optional[float] = None, 
+    sm_scale: Optional[float] = None,
     smooth_k: bool = True,
     **kwargs: Any,
 ) -> torch.Tensor:
-    """
-
-    Parameters
+    """Parameters
     ----------
     q : torch.Tensor
         The query tensor, shape: ``[cu_seqlens_q[-1], num_qo_heads, head_dim]``.
@@ -343,29 +342,29 @@ def sageattn_varlen(
         Whether to smooth the key tensor by subtracting the mean along the sequence dimension.
         Default: True.
 
-    Returns
+    Returns:
     -------
     torch.Tensor
         The output tensor, shape: ``[cu_seqlens_q[-1], num_qo_heads, head_dim]``.
 
-    Note
+    Note:
     ----
     - ``num_qo_heads`` must be divisible by ``num_kv_heads``.
     - The tensors `q`, `k`, and `v` must have the dtype ``torch.float16``, ``torch.bfloat16`` or ``torch.float32``.
     - The tensors `cu_seqlens_q` and `cu_seqlens_k` must have the dtype ``torch.int32`` or ``torch.int64``.
     - All tensors must be on the same cuda device.
     - `smooth_k` will introduce slight overhead but will improve the accuracy under most circumstances.
+
     """
-    
     dtype = q.dtype
     assert q.is_cuda, "Input tensors must be on cuda."
     assert dtype in [torch.float16, torch.bfloat16], "Input tensors must be in dtype of torch.float16 or torch.bfloat16"
     assert q.device == k.device == v.device, "All tensors must be on the same device."
     assert q.dtype == k.dtype == v.dtype, "All tensors must have the same dtype."
 
-    # FIXME(DefTruth): make sage attention work compatible with distributed 
-    # env, for example, xDiT which launch by torchrun. Without this workaround, 
-    # sage attention will run into illegal memory access error after first 
+    # FIXME(DefTruth): make sage attention work compatible with distributed
+    # env, for example, xDiT which launch by torchrun. Without this workaround,
+    # sage attention will run into illegal memory access error after first
     # inference step in distributed env for multi gpus inference. This small
     # workaround also make sage attention work compatible with torch.compile
     # through non-fullgraph compile mode.
@@ -411,8 +410,8 @@ def sageattn_varlen(
 @torch.compiler.disable
 def sageattn_qk_int8_pv_fp16_cuda(
     qkv_list,
-    # q: torch.Tensor, 
-    # k: torch.Tensor, 
+    # q: torch.Tensor,
+    # k: torch.Tensor,
     # v: torch.Tensor,
     tensor_layout: str = "HND",
     is_causal: bool = False,
@@ -424,8 +423,7 @@ def sageattn_qk_int8_pv_fp16_cuda(
     return_lse: bool = False,
     **kwargs: Any,
 ) -> torch.Tensor:
-    """
-    SageAttention with INT8 quantization for Q and K, FP16 PV with FP16/FP32 accumulation, implemented using CUDA.
+    """SageAttention with INT8 quantization for Q and K, FP16 PV with FP16/FP32 accumulation, implemented using CUDA.
 
     Parameters
     ----------
@@ -497,9 +495,10 @@ def sageattn_qk_int8_pv_fp16_cuda(
     - The tensors `q`, `k`, and `v` must have the dtype ``torch.float16`` or ``torch.bfloat16``
     - All tensors must be on the same cuda device.
     - `smooth_k` will introduce slight overhead but will improve the accuracy under most circumstances.
+
     """
     q,k,v = qkv_list
-    qkv_list.clear() 
+    qkv_list.clear()
     dtype = q.dtype
     assert SM80_ENABLED, "SM80 kernel is not available. make sure you GPUs with compute capability 8.0 or higher."
     assert q.is_cuda, "Input tensors must be on cuda."
@@ -508,9 +507,9 @@ def sageattn_qk_int8_pv_fp16_cuda(
     assert q.device == k.device == v.device, "All tensors must be on the same device."
     assert q.dtype == k.dtype == v.dtype, "All tensors must have the same dtype."
 
-    # FIXME(DefTruth): make sage attention work compatible with distributed 
-    # env, for example, xDiT which launch by torchrun. Without this workaround, 
-    # sage attention will run into illegal memory access error after first 
+    # FIXME(DefTruth): make sage attention work compatible with distributed
+    # env, for example, xDiT which launch by torchrun. Without this workaround,
+    # sage attention will run into illegal memory access error after first
     # inference step in distributed env for multi gpus inference. This small
     # workaround also make sage attention work compatible with torch.compile
     # through non-fullgraph compile mode.
@@ -587,8 +586,7 @@ def sageattn_qk_int8_pv_fp16_cuda(
 
     if return_lse:
         return o, lse / 1.44269504 + lse_correction * sm_scale if smooth_k else lse / 1.44269504
-    else:
-        return o
+    return o
 
 @torch.compiler.disable
 def sageattn_qk_int8_pv_fp8_cuda(
@@ -603,8 +601,7 @@ def sageattn_qk_int8_pv_fp8_cuda(
     return_lse: bool = False,
     **kwargs: Any,
 ) -> torch.Tensor:
-    """
-    SageAttention with INT8 quantization for Q and K, FP8 PV with FP32 accumulation, implemented using CUDA.
+    """SageAttention with INT8 quantization for Q and K, FP8 PV with FP32 accumulation, implemented using CUDA.
 
     Parameters
     ----------
@@ -675,6 +672,7 @@ def sageattn_qk_int8_pv_fp8_cuda(
     - The tensors `q`, `k`, and `v` must have the dtype ``torch.float16`` or ``torch.bfloat16``
     - All tensors must be on the same cuda device.
     - `smooth_k` will introduce slight overhead but will improve the accuracy under most circumstances.
+
     """
     q, k, v = qkv_list
     qkv_list.clear()
@@ -687,9 +685,9 @@ def sageattn_qk_int8_pv_fp8_cuda(
     assert q.device == k.device == v.device, "All tensors must be on the same device."
     assert q.dtype == k.dtype == v.dtype, "All tensors must have the same dtype."
 
-    # FIXME(DefTruth): make sage attention work compatible with distributed 
-    # env, for example, xDiT which launch by torchrun. Without this workaround, 
-    # sage attention will run into illegal memory access error after first 
+    # FIXME(DefTruth): make sage attention work compatible with distributed
+    # env, for example, xDiT which launch by torchrun. Without this workaround,
+    # sage attention will run into illegal memory access error after first
     # inference step in distributed env for multi gpus inference. This small
     # workaround also make sage attention work compatible with torch.compile
     # through non-fullgraph compile mode.
@@ -758,15 +756,14 @@ def sageattn_qk_int8_pv_fp8_cuda(
 
     if return_lse:
         return o, lse / 1.44269504 + lse_correction * sm_scale if smooth_k else lse / 1.44269504
-    else:
-        return o
+    return o
 
 
 @torch.compiler.disable
 def sageattn_qk_int8_pv_fp8_window_cuda(
     qkv_list,
-    # q: torch.Tensor, 
-    # k: torch.Tensor, 
+    # q: torch.Tensor,
+    # k: torch.Tensor,
     # v: torch.Tensor,
     tensor_layout: str = "HND",
     is_causal: bool = False,
@@ -779,8 +776,7 @@ def sageattn_qk_int8_pv_fp8_window_cuda(
     window = -1,
     **kwargs: Any,
 ) -> torch.Tensor:
-    """
-    SageAttention with INT8 quantization for Q and K, FP8 PV with FP32 accumulation, implemented using CUDA.
+    """SageAttention with INT8 quantization for Q and K, FP8 PV with FP32 accumulation, implemented using CUDA.
 
     Parameters
     ----------
@@ -851,6 +847,7 @@ def sageattn_qk_int8_pv_fp8_window_cuda(
     - The tensors `q`, `k`, and `v` must have the dtype ``torch.float16`` or ``torch.bfloat16``
     - All tensors must be on the same cuda device.
     - `smooth_k` will introduce slight overhead but will improve the accuracy under most circumstances.
+
     """
     q,k,v = qkv_list
     qkv_list.clear()
@@ -862,9 +859,9 @@ def sageattn_qk_int8_pv_fp8_window_cuda(
     assert q.device == k.device == v.device, "All tensors must be on the same device."
     assert q.dtype == k.dtype == v.dtype, "All tensors must have the same dtype."
 
-    # FIXME(DefTruth): make sage attention work compatible with distributed 
-    # env, for example, xDiT which launch by torchrun. Without this workaround, 
-    # sage attention will run into illegal memory access error after first 
+    # FIXME(DefTruth): make sage attention work compatible with distributed
+    # env, for example, xDiT which launch by torchrun. Without this workaround,
+    # sage attention will run into illegal memory access error after first
     # inference step in distributed env for multi gpus inference. This small
     # workaround also make sage attention work compatible with torch.compile
     # through non-fullgraph compile mode.
@@ -935,14 +932,13 @@ def sageattn_qk_int8_pv_fp8_window_cuda(
 
     if return_lse:
         return o, lse / 1.44269504 + lse_correction * sm_scale if smooth_k else lse / 1.44269504
-    else:
-        return o
+    return o
 
 @torch.compiler.disable
 def sageattn_qk_int8_pv_fp8_cuda_sm90(
     qkv_list,
-    # q: torch.Tensor, 
-    # k: torch.Tensor, 
+    # q: torch.Tensor,
+    # k: torch.Tensor,
     # v: torch.Tensor,
     tensor_layout: str = "HND",
     is_causal: bool = False,
@@ -953,8 +949,7 @@ def sageattn_qk_int8_pv_fp8_cuda_sm90(
     return_lse: bool = False,
     **kwargs: Any,
 ) -> torch.Tensor:
-    """
-    SageAttention with INT8 quantization for Q and K, FP8 PV with FP32 accumulation, implemented using CUDA.
+    """SageAttention with INT8 quantization for Q and K, FP8 PV with FP32 accumulation, implemented using CUDA.
 
     Parameters
     ----------
@@ -1020,6 +1015,7 @@ def sageattn_qk_int8_pv_fp8_cuda_sm90(
     - The tensors `q`, `k`, and `v` must have the dtype ``torch.float16`` or ``torch.bfloat16``
     - All tensors must be on the same cuda device.
     - `smooth_k` will introduce slight overhead but will improve the accuracy under most circumstances.
+
     """
     q,k,v = qkv_list
     qkv_list.clear()
@@ -1096,12 +1092,11 @@ def sageattn_qk_int8_pv_fp8_cuda_sm90(
     if pv_accum_dtype == "fp32":
         raise NotImplementedError("Please use pv_accum_dtype='fp32+fp32' for sm90.")
         lse = _qattn_sm90.qk_int8_sv_f8_accum_f32_fuse_v_scale_attn(q_int8, k_int8, v_fp8, o, q_scale, k_scale, v_scale, _tensor_layout, _is_caual, _qk_quant_gran, sm_scale, _return_lse)
-    elif pv_accum_dtype == "fp32+fp32":
+    if pv_accum_dtype == "fp32+fp32":
         lse = _qattn_sm90.qk_int8_sv_f8_accum_f32_fuse_v_scale_attn_inst_buf(q_int8, k_int8, v_fp8, o, q_scale, k_scale, v_scale, _tensor_layout, _is_caual, _qk_quant_gran, sm_scale, _return_lse)
 
     o = o[..., :head_dim_og]
 
     if return_lse:
         return o, lse / 1.44269504 + lse_correction * sm_scale if smooth_k else lse / 1.44269504
-    else:
-        return o
+    return o

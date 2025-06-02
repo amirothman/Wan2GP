@@ -1,20 +1,20 @@
 import json
 import os
+from collections.abc import Mapping
 from functools import partial
 from types import SimpleNamespace
-from typing import Any, Mapping, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
 import torch
+from diffusers.utils import logging
 from einops import rearrange
 from torch import nn
 from torch.nn import functional
 
-from diffusers.utils import logging
-
-from ltx_video.utils.torch_utils import Identity
 from ltx_video.models.autoencoders.conv_nd_factory import make_conv_nd, make_linear_nd
 from ltx_video.models.autoencoders.pixel_norm import PixelNorm
 from ltx_video.models.autoencoders.vae import AutoencoderKLWrapper
+from ltx_video.utils.torch_utils import Identity
 
 logger = logging.get_logger(__name__)
 
@@ -40,7 +40,7 @@ class VideoAutoencoder(AutoencoderKLWrapper):
             pretrained_model_name_or_path / "per_channel_statistics.json"
         )
         if statistics_local_path.exists():
-            with open(statistics_local_path, "r") as file:
+            with open(statistics_local_path) as file:
                 data = json.load(file)
             transposed_data = list(zip(*data["data"]))
             data_dict = {
@@ -133,8 +133,7 @@ class VideoAutoencoder(AutoencoderKLWrapper):
 
     @property
     def is_video_supported(self):
-        """
-        Check if the model supports video inputs of shape (B, C, F, H, W). Otherwise, the model only supports 2D images.
+        """Check if the model supports video inputs of shape (B, C, F, H, W). Otherwise, the model only supports 2D images.
         """
         return self.dims != 2
 
@@ -183,8 +182,7 @@ class VideoAutoencoder(AutoencoderKLWrapper):
 
 
 class Encoder(nn.Module):
-    r"""
-    The `Encoder` layer of a variational autoencoder that encodes its input into a latent representation.
+    r"""The `Encoder` layer of a variational autoencoder that encodes its input into a latent representation.
 
     Args:
         in_channels (`int`, *optional*, defaults to 3):
@@ -203,6 +201,7 @@ class Encoder(nn.Module):
             The normalization layer to use. Can be either `group_norm` or `pixel_norm`.
         latent_log_var (`str`, *optional*, defaults to `per_channel`):
             The number of channels for the log variance. Can be either `per_channel`, `uniform`, or `none`.
+
     """
 
     def __init__(
@@ -314,7 +313,6 @@ class Encoder(nn.Module):
         self, sample: torch.FloatTensor, return_features=False
     ) -> torch.FloatTensor:
         r"""The forward method of the `Encoder` class."""
-
         downsample_in_time = sample.shape[2] != 1
 
         # patchify
@@ -376,8 +374,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    r"""
-    The `Decoder` layer of a variational autoencoder that decodes its latent representation into an output sample.
+    r"""The `Decoder` layer of a variational autoencoder that decodes its latent representation into an output sample.
 
     Args:
         in_channels (`int`, *optional*, defaults to 3):
@@ -394,6 +391,7 @@ class Decoder(nn.Module):
             The patch size to use. Should be a power of 2.
         norm_layer (`str`, *optional*, defaults to `group_norm`):
             The normalization layer to use. Can be either `group_norm` or `pixel_norm`.
+
     """
 
     def __init__(
@@ -571,8 +569,7 @@ class DownEncoderBlock3D(nn.Module):
 
 
 class UNetMidBlock3D(nn.Module):
-    """
-    A 3D UNet mid-block [`UNetMidBlock3D`] with multiple residual blocks.
+    """A 3D UNet mid-block [`UNetMidBlock3D`] with multiple residual blocks.
 
     Args:
         in_channels (`int`): The number of input channels.
@@ -680,16 +677,17 @@ class UpDecoderBlock3D(nn.Module):
 
 
 class ResnetBlock3D(nn.Module):
-    r"""
-    A Resnet block.
+    r"""A Resnet block.
 
-    Parameters:
+    Parameters
+    ----------
         in_channels (`int`): The number of channels in the input.
         out_channels (`int`, *optional*, default to be `None`):
             The number of output channels for the first conv layer. If None, same as `in_channels`.
         dropout (`float`, *optional*, defaults to `0.0`): The dropout probability to use.
         groups (`int`, *optional*, default to `32`): The number of groups to use for the first normalization layer.
         eps (`float`, *optional*, defaults to `1e-6`): The epsilon to use for the normalization.
+
     """
 
     def __init__(
@@ -810,8 +808,7 @@ class Downsample3D(nn.Module):
 
 
 class Upsample3D(nn.Module):
-    """
-    An upsampling layer for 3D tensors of shape (B, C, D, H, W).
+    """An upsampling layer for 3D tensors of shape (B, C, D, H, W).
 
     :param channels: channels in the inputs and outputs.
     """

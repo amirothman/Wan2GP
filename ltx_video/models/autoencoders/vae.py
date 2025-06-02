@@ -1,15 +1,15 @@
+import inspect
 from typing import Optional, Union
 
 import torch
-import inspect
-import math
-import torch.nn as nn
 from diffusers import ConfigMixin, ModelMixin
 from diffusers.models.autoencoders.vae import (
     DecoderOutput,
     DiagonalGaussianDistribution,
 )
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
+from torch import nn
+
 from ltx_video.models.autoencoders.conv_nd_factory import make_conv_nd
 
 
@@ -26,6 +26,7 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
             Decoder module.
         latent_channels (`int`, *optional*, defaults to 4):
             Number of latent channels.
+
     """
 
     def __init__(
@@ -49,7 +50,7 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
             "mean-of-means",
                 torch.zeros_like(std_of_means)
         )
-        
+
 
 
         # pass init params to Encoder
@@ -97,20 +98,20 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
             if mixed_precision:
                 device_mem_capacity = device_mem_capacity / 1.5
             if device_mem_capacity >= 24000:
-                use_vae_config = 1            
+                use_vae_config = 1
             elif device_mem_capacity >= 8000:
                 use_vae_config = 2
-            else:          
+            else:
                 use_vae_config = 3
         else:
             use_vae_config = vae_config
 
         if use_vae_config == 1:
-            hw_tile = 0 
+            hw_tile = 0
         elif use_vae_config == 2:
-            hw_tile = 512  
-        else: 
-            hw_tile = 256  
+            hw_tile = 512
+        else:
+            hw_tile = 256
 
         return  (z_tile, hw_tile)
 
@@ -122,8 +123,7 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
         self.tile_overlap_factor = overlap_factor
 
     def enable_z_tiling(self, z_sample_size: int = 4):
-        r"""
-        Enable tiling during VAE decoding.
+        r"""Enable tiling during VAE decoding.
 
         When this option is enabled, the VAE will split the input tensor in tiles to compute decoding in several
         steps. This is useful to save some memory and allow larger batch sizes.
@@ -135,21 +135,18 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
         ), f"z_sample_size must be a multiple of 4 or 1. Got {z_sample_size}."
 
     def disable_z_tiling(self):
-        r"""
-        Disable tiling during VAE decoding. If `use_tiling` was previously invoked, this method will go back to computing
+        r"""Disable tiling during VAE decoding. If `use_tiling` was previously invoked, this method will go back to computing
         decoding in one step.
         """
         self.use_z_tiling = False
 
     def enable_hw_tiling(self):
-        r"""
-        Enable tiling during VAE decoding along the height and width dimension.
+        r"""Enable tiling during VAE decoding along the height and width dimension.
         """
         self.use_hw_tiling = True
 
     def disable_hw_tiling(self):
-        r"""
-        Disable tiling during VAE decoding along the height and width dimension.
+        r"""Disable tiling during VAE decoding along the height and width dimension.
         """
         self.use_hw_tiling = False
 
@@ -266,8 +263,8 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
         self, z: torch.FloatTensor, return_dict: bool = True
     ) -> Union[DecoderOutput, torch.FloatTensor]:
         if self.use_z_tiling and z.shape[2] > (self.z_sample_size + 1) > 1:
-            tile_latent_min_tsize = self.z_sample_size 
-            tile_sample_min_tsize = tile_latent_min_tsize *  8 
+            tile_latent_min_tsize = self.z_sample_size
+            tile_sample_min_tsize = tile_latent_min_tsize *  8
             tile_overlap_factor = 0.25
 
             B, C, T, H, W = z.shape
@@ -299,7 +296,7 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
         else:
             moments = (
                 self._hw_tiled_encode(z, return_dict)
-                if self.use_hw_tiling and z.shape[2] > 1 
+                if self.use_hw_tiling and z.shape[2] > 1
                 else self._encode(z)
             )
 
@@ -364,8 +361,8 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
         assert target_shape is not None, "target_shape must be provided for decoding"
         if self.use_z_tiling and z.shape[2] > (self.z_sample_size + 1) > 1:
         # Split z into overlapping tiles and decode them separately.
-            tile_latent_min_tsize = self.z_sample_size 
-            tile_sample_min_tsize = tile_latent_min_tsize *  8 
+            tile_latent_min_tsize = self.z_sample_size
+            tile_sample_min_tsize = tile_latent_min_tsize *  8
             tile_overlap_factor = 0.25
 
             B, C, T, H, W = z.shape
@@ -377,7 +374,7 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
             for i in range(0, T, overlap_size):
                 tile = z[:, :, i: i + tile_latent_min_tsize + 1, :, :]
                 target_shape_split = list(target_shape)
-                target_shape_split[2] = tile.shape[2] * 8                
+                target_shape_split[2] = tile.shape[2] * 8
                 if self.use_hw_tiling:
                     decoded = self._hw_tiled_decode(tile, target_shape, timestep)
                 else:
@@ -399,13 +396,12 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
             if not return_dict:
                 return (dec,)
 
-            return DecoderOutput(sample=dec)            
-        else:
-            decoded = (
-                self._hw_tiled_decode(z, target_shape, timestep)
-                if self.use_hw_tiling
-                else self._decode(z, target_shape=target_shape, timestep=timestep)
-            )
+            return DecoderOutput(sample=dec)
+        decoded = (
+            self._hw_tiled_decode(z, target_shape, timestep)
+            if self.use_hw_tiling
+            else self._decode(z, target_shape=target_shape, timestep=timestep)
+        )
 
         if not return_dict:
             return (decoded,)
@@ -419,15 +415,15 @@ class AutoencoderKLWrapper(ModelMixin, ConfigMixin):
         return_dict: bool = True,
         generator: Optional[torch.Generator] = None,
     ) -> Union[DecoderOutput, torch.FloatTensor]:
-        r"""
-        Args:
-            sample (`torch.FloatTensor`): Input sample.
-            sample_posterior (`bool`, *optional*, defaults to `False`):
-                Whether to sample from the posterior.
-            return_dict (`bool`, *optional*, defaults to `True`):
-                Whether to return a [`DecoderOutput`] instead of a plain tuple.
-            generator (`torch.Generator`, *optional*):
-                Generator used to sample from the posterior.
+        r"""Args:
+        sample (`torch.FloatTensor`): Input sample.
+        sample_posterior (`bool`, *optional*, defaults to `False`):
+            Whether to sample from the posterior.
+        return_dict (`bool`, *optional*, defaults to `True`):
+            Whether to return a [`DecoderOutput`] instead of a plain tuple.
+        generator (`torch.Generator`, *optional*):
+            Generator used to sample from the posterior.
+
         """
         x = sample
         posterior = self.encode(x).latent_dist

@@ -1,10 +1,12 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 import torch
-import torch.nn as nn
+from torch import nn
 
-from .vit import (_make_pretrained_vitb16_384, _make_pretrained_vitb_rn50_384,
-                  _make_pretrained_vitl16_384)
+from .vit import (
+    _make_pretrained_vitb16_384,
+    _make_pretrained_vitb_rn50_384,
+    _make_pretrained_vitl16_384,
+)
 
 
 def _make_encoder(
@@ -148,12 +150,14 @@ def _make_pretrained_resnext101_wsl(use_pretrained):
 class Interpolate(nn.Module):
     """Interpolation module.
     """
+
     def __init__(self, scale_factor, mode, align_corners=False):
         """Init.
 
         Args:
             scale_factor (float): scaling
             mode (str): interpolation mode
+
         """
         super(Interpolate, self).__init__()
 
@@ -170,8 +174,8 @@ class Interpolate(nn.Module):
 
         Returns:
             tensor: interpolated data
-        """
 
+        """
         x = self.interp(x,
                         scale_factor=self.scale_factor,
                         mode=self.mode,
@@ -183,11 +187,13 @@ class Interpolate(nn.Module):
 class ResidualConvUnit(nn.Module):
     """Residual convolution module.
     """
+
     def __init__(self, features):
         """Init.
 
         Args:
             features (int): number of features
+
         """
         super().__init__()
 
@@ -215,6 +221,7 @@ class ResidualConvUnit(nn.Module):
 
         Returns:
             tensor: output
+
         """
         out = self.relu(x)
         out = self.conv1(out)
@@ -227,11 +234,13 @@ class ResidualConvUnit(nn.Module):
 class FeatureFusionBlock(nn.Module):
     """Feature fusion block.
     """
+
     def __init__(self, features):
         """Init.
 
         Args:
             features (int): number of features
+
         """
         super(FeatureFusionBlock, self).__init__()
 
@@ -243,6 +252,7 @@ class FeatureFusionBlock(nn.Module):
 
         Returns:
             tensor: output
+
         """
         output = xs[0]
 
@@ -262,11 +272,13 @@ class FeatureFusionBlock(nn.Module):
 class ResidualConvUnit_custom(nn.Module):
     """Residual convolution module.
     """
+
     def __init__(self, features, activation, bn):
         """Init.
 
         Args:
             features (int): number of features
+
         """
         super().__init__()
 
@@ -306,8 +318,8 @@ class ResidualConvUnit_custom(nn.Module):
 
         Returns:
             tensor: output
-        """
 
+        """
         out = self.activation(x)
         out = self.conv1(out)
         if self.bn is True:
@@ -329,6 +341,7 @@ class ResidualConvUnit_custom(nn.Module):
 class FeatureFusionBlock_custom(nn.Module):
     """Feature fusion block.
     """
+
     def __init__(self,
                  features,
                  activation,
@@ -340,6 +353,7 @@ class FeatureFusionBlock_custom(nn.Module):
 
         Args:
             features (int): number of features
+
         """
         super(FeatureFusionBlock_custom, self).__init__()
 
@@ -371,6 +385,7 @@ class FeatureFusionBlock_custom(nn.Module):
 
         Returns:
             tensor: output
+
         """
         output = xs[0]
 

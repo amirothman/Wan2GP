@@ -3,11 +3,11 @@ from typing import Optional, Tuple
 
 import numpy as np
 import torch
-import torch.nn as nn
-
+from diffusers.models.attention_processor import SpatialNorm
 from diffusers.utils import BaseOutput, is_torch_version
 from diffusers.utils.torch_utils import randn_tensor
-from diffusers.models.attention_processor import SpatialNorm
+from torch import nn
+
 from .unet_causal_3d_blocks import (
     CausalConv3d,
     UNetMidBlockCausal3D,
@@ -15,22 +15,22 @@ from .unet_causal_3d_blocks import (
     get_up_block3d,
 )
 
+
 @dataclass
 class DecoderOutput(BaseOutput):
-    r"""
-    Output of decoding method.
+    r"""Output of decoding method.
 
     Args:
         sample (`torch.FloatTensor` of shape `(batch_size, num_channels, height, width)`):
             The decoded output sample from the last layer of the model.
+
     """
 
     sample: torch.FloatTensor
 
 
 class EncoderCausal3D(nn.Module):
-    r"""
-    The `EncoderCausal3D` layer of a variational autoencoder that encodes its input into a latent representation.
+    r"""The `EncoderCausal3D` layer of a variational autoencoder that encodes its input into a latent representation.
 
     Args:
         in_channels (`int`, *optional*, defaults to 3):
@@ -50,6 +50,7 @@ class EncoderCausal3D(nn.Module):
             The activation function to use. See `~diffusers.models.activations.get_activation` for available options.
         double_z (`bool`, *optional*, defaults to `True`):
             Whether to double the number of output channels for the last block.
+
     """
 
     def __init__(
@@ -92,7 +93,7 @@ class EncoderCausal3D(nn.Module):
                 add_time_downsample = bool(i < num_time_downsample_layers)
             else:
                 raise ValueError(f"Unsupported time_compression_ratio: {time_compression_ratio}")
-            
+
             downsample_stride_HW = (2, 2) if add_spatial_downsample else (1, 1)
             downsample_stride_T = (2, ) if add_time_downsample else (1, )
             downsample_stride = tuple(downsample_stride_T + downsample_stride_HW)
@@ -184,8 +185,7 @@ class EncoderCausal3D(nn.Module):
 
 
 class DecoderCausal3D(nn.Module):
-    r"""
-    The `DecoderCausal3D` layer of a variational autoencoder that decodes its latent representation into an output sample.
+    r"""The `DecoderCausal3D` layer of a variational autoencoder that decodes its latent representation into an output sample.
 
     Args:
         in_channels (`int`, *optional*, defaults to 3):
@@ -204,6 +204,7 @@ class DecoderCausal3D(nn.Module):
             The activation function to use. See `~diffusers.models.activations.get_activation` for available options.
         norm_type (`str`, *optional*, defaults to `"group"`):
             The normalization type to use. Can be either `"group"` or `"spatial"`.
+
     """
 
     def __init__(
@@ -257,7 +258,7 @@ class DecoderCausal3D(nn.Module):
             num_time_upsample_layers = int(np.log2(time_compression_ratio))
 
             if time_compression_ratio == 4:
-                add_spatial_upsample = bool(i < num_spatial_upsample_layers) 
+                add_spatial_upsample = bool(i < num_spatial_upsample_layers)
                 add_time_upsample = bool(i >= len(block_out_channels) - 1 - num_time_upsample_layers and not is_final_block)
             elif time_compression_ratio == 8:
                 add_spatial_upsample = bool(i >= len(block_out_channels) - num_spatial_upsample_layers)
@@ -304,7 +305,7 @@ class DecoderCausal3D(nn.Module):
     ) -> torch.FloatTensor:
         r"""The forward method of the `DecoderCausal3D` class."""
         assert len(sample.shape) == 5, "The input tensor should have 5 dimensions"
-        
+
         sample = self.conv_in(sample)
 
         upscale_dtype = next(iter(self.up_blocks.parameters())).dtype
@@ -359,12 +360,12 @@ class DecoderCausal3D(nn.Module):
         else:
             sample = self.conv_norm_out(sample, latent_embeds)
         sample = self.conv_act(sample)
-        sample = self.conv_out(sample)   
+        sample = self.conv_out(sample)
 
         return sample
 
 
-class DiagonalGaussianDistribution(object):
+class DiagonalGaussianDistribution:
     def __init__(self, parameters: torch.Tensor, deterministic: bool = False):
         if parameters.ndim == 3:
             dim = 2 # (B, L, C)
@@ -397,22 +398,20 @@ class DiagonalGaussianDistribution(object):
     def kl(self, other: "DiagonalGaussianDistribution" = None) -> torch.Tensor:
         if self.deterministic:
             return torch.Tensor([0.0])
-        else:
-            reduce_dim = list(range(1, self.mean.ndim))
-            if other is None:
-                return 0.5 * torch.sum(
-                    torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar,
-                    dim=reduce_dim,
-                )
-            else:
-                return 0.5 * torch.sum(
-                    torch.pow(self.mean - other.mean, 2) / other.var
-                    + self.var / other.var
-                    - 1.0
-                    - self.logvar
-                    + other.logvar,
-                    dim=reduce_dim,
-                )
+        reduce_dim = list(range(1, self.mean.ndim))
+        if other is None:
+            return 0.5 * torch.sum(
+                torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar,
+                dim=reduce_dim,
+            )
+        return 0.5 * torch.sum(
+            torch.pow(self.mean - other.mean, 2) / other.var
+            + self.var / other.var
+            - 1.0
+            - self.logvar
+            + other.logvar,
+            dim=reduce_dim,
+        )
 
     def nll(self, sample: torch.Tensor, dims: Tuple[int, ...] = [1, 2, 3]) -> torch.Tensor:
         if self.deterministic:

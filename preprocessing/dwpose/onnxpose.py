@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 from typing import List, Tuple
 
 import cv2
 import numpy as np
 import onnxruntime as ort
+
 
 def preprocess(
     img: np.ndarray, out_bbox, input_size: Tuple[int, int] = (192, 256)
@@ -20,6 +20,7 @@ def preprocess(
         - resized_img (np.ndarray): Preprocessed image.
         - center (np.ndarray): Center of image.
         - scale (np.ndarray): Scale of image.
+
     """
     # get shape of image
     img_shape = img.shape[:2]
@@ -60,6 +61,7 @@ def inference(sess: ort.InferenceSession, img: np.ndarray) -> np.ndarray:
 
     Returns:
         outputs (np.ndarray): Output of RTMPose model.
+
     """
     all_out = []
     # build input
@@ -98,6 +100,7 @@ def postprocess(outputs: List[np.ndarray],
         tuple:
         - keypoints (np.ndarray): Rescaled keypoints.
         - scores (np.ndarray): Model predict scores.
+
     """
     all_key = []
     all_score = []
@@ -130,6 +133,7 @@ def bbox_xyxy2cs(bbox: np.ndarray,
             (n, 2)
         - np.ndarray[float32]: Scale (w, h) of the bbox in shape (2,) or
             (n, 2)
+
     """
     # convert single bbox from (4, ) to (1, 4)
     dim = bbox.ndim
@@ -158,6 +162,7 @@ def _fix_aspect_ratio(bbox_scale: np.ndarray,
 
     Returns:
         np.ndarray: The reshaped image scale in (2, )
+
     """
     w, h = np.hsplit(bbox_scale, [1])
     bbox_scale = np.where(w > h * aspect_ratio,
@@ -175,6 +180,7 @@ def _rotate_point(pt: np.ndarray, angle_rad: float) -> np.ndarray:
 
     Returns:
         np.ndarray: Rotated point in shape (2, )
+
     """
     sn, cs = np.sin(angle_rad), np.cos(angle_rad)
     rot_mat = np.array([[cs, -sn], [sn, cs]])
@@ -194,6 +200,7 @@ def _get_3rd_point(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
     Returns:
         np.ndarray: The 3rd point.
+
     """
     direction = a - b
     c = b + np.r_[-direction[1], direction[0]]
@@ -223,6 +230,7 @@ def get_warp_matrix(center: np.ndarray,
 
     Returns:
         np.ndarray: A 2x3 transformation matrix
+
     """
     shift = np.array(shift)
     src_w = scale[0]
@@ -268,6 +276,7 @@ def top_down_affine(input_size: dict, bbox_scale: dict, bbox_center: dict,
         tuple: A tuple containing center and scale.
         - np.ndarray[float32]: img after affine transform.
         - np.ndarray[float32]: bbox scale after affine transform.
+
     """
     w, h = input_size
     warp_size = (int(w), int(h))
@@ -307,6 +316,7 @@ def get_simcc_maximum(simcc_x: np.ndarray,
             (K, 2) or (N, K, 2)
         - vals (np.ndarray): values of maximum heatmap responses in shape
             (K,) or (N, K)
+
     """
     N, K, Wx = simcc_x.shape
     simcc_x = simcc_x.reshape(N * K, -1)
@@ -345,6 +355,7 @@ def decode(simcc_x: np.ndarray, simcc_y: np.ndarray,
         tuple: A tuple containing center and scale.
         - np.ndarray[float32]: keypoints in shape (K, 2) or (n, K, 2)
         - np.ndarray[float32]: scores in shape (K,) or (n, K)
+
     """
     keypoints, scores = get_simcc_maximum(simcc_x, simcc_y)
     keypoints /= simcc_split_ratio

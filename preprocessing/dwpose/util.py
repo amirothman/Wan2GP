@@ -1,9 +1,10 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 import math
-import numpy as np
+
+import cv2
 import matplotlib
-import cv2  
+import numpy as np
+
 matplotlib.use('TkAgg')
 
 eps = 0.01
@@ -19,8 +20,7 @@ def smart_resize(x, s):
     if Co == 3 or Co == 1:
         k = float(Ht + Wt) / float(Ho + Wo)
         return cv2.resize(x, (int(Wt), int(Ht)), interpolation=cv2.INTER_AREA if k < 1 else cv2.INTER_LANCZOS4)
-    else:
-        return np.stack([smart_resize(x[:, :, i], s) for i in range(Co)], axis=2)
+    return np.stack([smart_resize(x[:, :, i], s) for i in range(Co)], axis=2)
 
 
 def smart_resize_k(x, fx, fy):
@@ -33,8 +33,7 @@ def smart_resize_k(x, fx, fy):
     if Co == 3 or Co == 1:
         k = float(Ht + Wt) / float(Ho + Wo)
         return cv2.resize(x, (int(Wt), int(Ht)), interpolation=cv2.INTER_AREA if k < 1 else cv2.INTER_LANCZOS4)
-    else:
-        return np.stack([smart_resize_k(x[:, :, i], fx, fy) for i in range(Co)], axis=2)
+    return np.stack([smart_resize_k(x[:, :, i], fx, fy) for i in range(Co)], axis=2)
 
 
 def padRightDownCorner(img, stride, padValue):
@@ -200,8 +199,8 @@ def handDetect(candidate, subset, oriImg):
             x -= width / 2
             y -= width / 2  # width = height
             # overflow the image
-            if x < 0: x = 0
-            if y < 0: y = 0
+            x = max(x, 0)
+            y = max(y, 0)
             width1 = width
             width2 = width
             if x + width > image_width: width1 = image_width - x
@@ -267,11 +266,9 @@ def faceDetect(candidate, subset, oriImg):
         x -= width
         y -= width
 
-        if x < 0:
-            x = 0
+        x = max(x, 0)
 
-        if y < 0:
-            y = 0
+        y = max(y, 0)
 
         width1 = width * 2
         width2 = width * 2

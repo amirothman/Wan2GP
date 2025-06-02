@@ -1,14 +1,11 @@
-import numpy as np
 import math
+
+import numpy as np
 from PIL import Image
-import torch
-import copy
-import string
-import random
 
 
 def align_to(value, alignment):
-    """align hight, width according to alignment
+    """Align hight, width according to alignment
 
     Args:
         value (int): height or width
@@ -16,12 +13,13 @@ def align_to(value, alignment):
 
     Returns:
         int: the aligned value
+
     """
     return int(math.ceil(value / alignment) * alignment)
 
 
 def black_image(width, height):
-    """generate a black image
+    """Generate a black image
 
     Args:
         width (int): image width
@@ -29,13 +27,14 @@ def black_image(width, height):
 
     Returns:
         _type_: a black image
+
     """
     black_image = Image.new("RGB", (width, height), (0, 0, 0))
     return black_image
 
 
 def get_closest_ratio(height: float, width: float, ratios: list, buckets: list):
-    """get the closest ratio in the buckets
+    """Get the closest ratio in the buckets
 
     Args:
         height (float): video height
@@ -45,6 +44,7 @@ def get_closest_ratio(height: float, width: float, ratios: list, buckets: list):
 
     Returns:
         the closest ratio in the buckets and the corresponding ratio
+
     """
     aspect_ratio = float(height) / float(width)
     closest_ratio_id = np.abs(ratios - aspect_ratio).argmin()
@@ -53,7 +53,7 @@ def get_closest_ratio(height: float, width: float, ratios: list, buckets: list):
 
 
 def generate_crop_size_list(base_size=256, patch_size=32, max_ratio=4.0):
-    """generate crop size list
+    """Generate crop size list
 
     Args:
         base_size (int, optional): the base size for generate bucket. Defaults to 256.
@@ -62,6 +62,7 @@ def generate_crop_size_list(base_size=256, patch_size=32, max_ratio=4.0):
 
     Returns:
         list: generate crop size list
+
     """
     num_patches = round((base_size / patch_size) ** 2)
     assert max_ratio >= 1.0
@@ -78,7 +79,7 @@ def generate_crop_size_list(base_size=256, patch_size=32, max_ratio=4.0):
 
 
 def align_floor_to(value, alignment):
-    """align hight, width according to alignment
+    """Align hight, width according to alignment
 
     Args:
         value (int): height or width
@@ -86,5 +87,6 @@ def align_floor_to(value, alignment):
 
     Returns:
         int: the aligned value
+
     """
     return int(math.floor(value / alignment) * alignment)

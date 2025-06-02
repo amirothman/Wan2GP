@@ -1,5 +1,4 @@
-"""
-big_modules.py - This file stores higher-level network blocks.
+"""big_modules.py - This file stores higher-level network blocks.
 
 x - usually denotes features that are shared between objects.
 g - usually denotes features that are not shared between objects 
@@ -8,15 +7,22 @@ g - usually denotes features that are not shared between objects
 The trailing number of a variable usually denotes the stride
 """
 
-from typing import Iterable
-from omegaconf import DictConfig
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from collections.abc import Iterable
 
-from .group_modules import MainToGroupDistributor, GroupFeatureFusionBlock, GConv2d
+import torch
+import torch.nn.functional as F
+from omegaconf import DictConfig
+from torch import nn
+
+from .group_modules import GConv2d, GroupFeatureFusionBlock, MainToGroupDistributor
+from .modules import (
+    DecoderFeatureProcessor,
+    MaskUpsampleBlock,
+    SensoryDeepUpdater,
+    SensoryUpdater_fullscale,
+)
 from .utils import resnet
-from .modules import SensoryDeepUpdater, SensoryUpdater_fullscale, DecoderFeatureProcessor, MaskUpsampleBlock
+
 
 class UncertPred(nn.Module):
     def __init__(self, model_cfg: DictConfig):
@@ -27,7 +33,7 @@ class UncertPred(nn.Module):
         self.conv3x3 = nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=1, groups=1, bias=False, dilation=1)
         self.bn2 = nn.BatchNorm2d(32)
         self.conv3x3_out = nn.Conv2d(32, 1, kernel_size=3, stride=1, padding=1, groups=1, bias=False, dilation=1)
-    
+
     def forward(self, last_frame_feat: torch.Tensor, cur_frame_feat: torch.Tensor, last_mask: torch.Tensor, mem_val_diff:torch.Tensor):
         last_mask = F.interpolate(last_mask, size=last_frame_feat.shape[-2:], mode='area')
         x = torch.cat([last_frame_feat, cur_frame_feat, last_mask, mem_val_diff], dim=1)
@@ -39,7 +45,7 @@ class UncertPred(nn.Module):
         x = self.relu(x)
         x = self.conv3x3_out(x)
         return x
-    
+
     # override the default train() to freeze BN statistics
     def train(self, mode=True):
         self.training = False
@@ -339,14 +345,13 @@ class MaskDecoder(nn.Module):
                         logits = last_mask + res
                     else:
                         logits = self.pred_seg(F.relu(p1.flatten(start_dim=0, end_dim=1).float()))
+                elif last_mask is not None:
+                    res = self.pred_mat(F.relu(p1.flatten(start_dim=0, end_dim=1).float()))
+                    if sigmoid_residual:
+                        res = (torch.sigmoid(res) - 0.5) * 2  # regularization: (-1, 1) change on last mask
+                    logits = last_mask + res
                 else:
-                    if last_mask is not None:
-                        res = self.pred_mat(F.relu(p1.flatten(start_dim=0, end_dim=1).float()))
-                        if sigmoid_residual:
-                            res = (torch.sigmoid(res) - 0.5) * 2  # regularization: (-1, 1) change on last mask
-                        logits = last_mask + res
-                    else:
-                        logits = self.pred_mat(F.relu(p1.flatten(start_dim=0, end_dim=1).float()))
+                    logits = self.pred_mat(F.relu(p1.flatten(start_dim=0, end_dim=1).float()))
             ## SensoryUpdater_fullscale
             if update_sensory:
                 p1 = torch.cat(

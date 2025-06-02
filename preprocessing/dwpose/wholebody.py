@@ -1,10 +1,11 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 import cv2
 import numpy as np
 import onnxruntime as ort
+
 from .onnxdet import inference_detector
 from .onnxpose import inference_pose
+
 
 def HWC3(x):
     assert x.dtype == np.uint8
@@ -47,7 +48,7 @@ class Wholebody:
 
         self.session_det = ort.InferenceSession(path_or_bytes=onnx_det, providers=providers)
         self.session_pose = ort.InferenceSession(path_or_bytes=onnx_pose, providers=providers)
-    
+
     def __call__(self, ori_img):
         det_result = inference_detector(self.session_det, ori_img)
         keypoints, scores = inference_pose(self.session_pose, det_result, ori_img)
@@ -74,7 +75,7 @@ class Wholebody:
 
         keypoints, scores = keypoints_info[
             ..., :2], keypoints_info[..., 2]
-        
+
         return keypoints, scores, det_result
 
 

@@ -55,3 +55,25 @@ User requested ditching CLI and Gradio UI complexity in favor of simple script-b
 - Remove all UI, CLI, queue, LoRA, and advanced features
 
 ---
+[2025-01-02 22:50:00] - Ruff Configuration for E501 Compliance
+
+## Decision
+
+Configure ruff to format line length to conform to flake8 E501 rule
+
+## Rationale
+
+User requested setup of ruff to handle line length formatting that conforms to flake8 E501 (line too long) rule. This ensures consistent code formatting and adherence to Python style guidelines across the codebase.
+
+## Implementation Details
+
+- Created [`pyproject.toml`](pyproject.toml:1) with comprehensive ruff configuration
+- Set line length limit to 88 characters (Black's default, more practical than 79)
+- Enabled E501 rule detection in linter configuration
+- Configured formatter with matching 88-character line width
+- Enabled auto-fixing for compatible rules
+- Added comprehensive rule selection including pycodestyle, pyflakes, isort, and more
+- Tested configuration successfully - detected 2,765 E501 violations in existing codebase
+- Verified both linting (`ruff check --select E501`) and formatting (`ruff format`) functionality
+
+---

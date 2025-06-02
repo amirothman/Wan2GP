@@ -1,43 +1,45 @@
 # Adapted from: https://github.com/huggingface/diffusers/blob/v0.26.3/src/diffusers/models/transformers/transformer_2d.py
-import math
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
-import os
-import json
 import glob
+import json
+import math
+import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.models.embeddings import PixArtAlphaTextProjection
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers.models.normalization import AdaLayerNormSingle
-from diffusers.utils import BaseOutput, is_torch_version
-from diffusers.utils import logging
-from torch import nn
+from diffusers.utils import BaseOutput, logging
 from safetensors import safe_open
-from ltx_video.models.transformers.attention import BasicTransformerBlock, reshape_hidden_states, restore_hidden_states_shape
-from ltx_video.utils.skip_layer_strategy import SkipLayerStrategy
+from torch import nn
 
+from ltx_video.models.transformers.attention import (
+    BasicTransformerBlock,
+    reshape_hidden_states,
+    restore_hidden_states_shape,
+)
 from ltx_video.utils.diffusers_config_mapping import (
+    TRANSFORMER_KEYS_RENAME_DICT,
     diffusers_and_ours_config_mapping,
     make_hashable_key,
-    TRANSFORMER_KEYS_RENAME_DICT,
 )
-
+from ltx_video.utils.skip_layer_strategy import SkipLayerStrategy
 
 logger = logging.get_logger(__name__)
 
 
 @dataclass
 class Transformer3DModelOutput(BaseOutput):
-    """
-    The output of [`Transformer2DModel`].
+    """The output of [`Transformer2DModel`].
 
     Args:
         sample (`torch.FloatTensor` of shape `(batch_size, num_channels, height, width)` or `(batch size, num_vector_embeds - 1, num_latent_pixels)` if [`Transformer2DModel`] is discrete):
             The hidden states output conditioned on the `encoder_hidden_states` input. If discrete, returns probability
             distributions for the unnoised latent pixels.
+
     """
 
     sample: torch.FloatTensor
@@ -97,7 +99,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
 
         if self.positional_embedding_type == "absolute":
             raise ValueError("Absolute positional embedding is no longer supported")
-        elif self.positional_embedding_type == "rope":
+        if self.positional_embedding_type == "rope":
             if positional_embedding_theta is None:
                 raise ValueError(
                     "If `positional_embedding_type` type is rope, `positional_embedding_theta` must also be defined"
@@ -158,8 +160,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
         self.gradient_checkpointing = False
 
     def set_use_tpu_flash_attention(self):
-        r"""
-        Function sets the flag in this object and propagates down the children. The flag will enforce the usage of TPU
+        r"""Function sets the flag in this object and propagates down the children. The flag will enforce the usage of TPU
         attention kernel.
         """
         logger.info("ENABLE TPU FLASH ATTENTION -> TRUE")
@@ -260,7 +261,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
         *args,
         **kwargs,
     ):
-        if any([key.startswith("model.diffusion_model.") for key in state_dict.keys()]):
+        if any([key.startswith("model.diffusion_model.") for key in state_dict]):
             state_dict = {
                 key.replace("model.diffusion_model.", ""): value
                 for key, value in state_dict.items()
@@ -278,7 +279,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
         pretrained_model_path = Path(pretrained_model_path)
         if pretrained_model_path.is_dir():
             config_path = pretrained_model_path / "transformer" / "config.json"
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 config = make_hashable_key(json.load(f))
 
             assert config in diffusers_and_ours_config_mapping, (
@@ -343,8 +344,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
         mixed = False,
         return_dict: bool = True,
     ):
-        """
-        The [`Transformer2DModel`] forward method.
+        """The [`Transformer2DModel`] forward method.
 
         Args:
             hidden_states (`torch.LongTensor` of shape `(batch size, num latent pixels)` if discrete, `torch.FloatTensor` of shape `(batch size, channel, height, width)` if continuous):
@@ -386,6 +386,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
         Returns:
             If `return_dict` is True, an [`~models.transformer_2d.Transformer2DModelOutput`] is returned, otherwise a
             `tuple` where the first element is the sample tensor.
+
         """
         # for tpu attention offload 2d token masks are used. No need to transform.
         if not self.use_tpu_flash_attention:
@@ -439,8 +440,8 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
         if mixed:
             timestep = timestep.float()
             embedded_timestep = embedded_timestep.float()
-            hidden_states = hidden_states.float() 
- 
+            hidden_states = hidden_states.float()
+
 
         # 2. Blocks
         if self.caption_projection is not None:
@@ -493,7 +494,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
         shift, scale = scale_shift_values[:, :, 0].unsqueeze(-2), scale_shift_values[:, :, 1].unsqueeze(-2)
         hidden_states = self.norm_out(hidden_states)
         # Modulation
-        
+
 
         hidden_states = reshape_hidden_states(hidden_states, scale.shape[1])
         # hidden_states = hidden_states * (1 + scale)

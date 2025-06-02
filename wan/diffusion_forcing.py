@@ -1,24 +1,22 @@
+import logging
 import math
 import os
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
-import logging
+from typing import List, Optional, Tuple, Union
+
 import numpy as np
 import torch
 from diffusers.image_processor import PipelineImageInput
 from diffusers.utils.torch_utils import randn_tensor
-from diffusers.video_processor import VideoProcessor
 from tqdm import tqdm
+
+from wan.modules.posemb_layers import get_rotary_pos_embed
+from wan.utils.utils import calculate_new_dimensions
+
 from .modules.model import WanModel
 from .modules.t5 import T5EncoderModel
 from .modules.vae import WanVAE
-from wan.modules.posemb_layers import get_rotary_pos_embed
-from wan.utils.utils import calculate_new_dimensions
-from .utils.fm_solvers import (FlowDPMSolverMultistepScheduler,
-                               get_sampling_sigmas, retrieve_timesteps)
 from .utils.fm_solvers_unipc import FlowUniPCMultistepScheduler
+
 
 class DTT2V:
 
@@ -35,7 +33,7 @@ class DTT2V:
         VAE_dtype = torch.float32,
         mixed_precision_transformer = False,
     ):
-        self.device = torch.device(f"cuda")
+        self.device = torch.device("cuda")
         self.config = config
         self.rank = rank
         self.dtype = dtype
@@ -51,7 +49,7 @@ class DTT2V:
             shard_fn= None)
 
         self.vae_stride = config.vae_stride
-        self.patch_size = config.patch_size 
+        self.patch_size = config.patch_size
 
         self.vae = WanVAE(
             vae_pth=os.path.join(checkpoint_dir, config.vae_checkpoint), dtype= VAE_dtype,
@@ -67,9 +65,9 @@ class DTT2V:
         # dtype = torch.float16
         self.model.lock_layers_dtypes(torch.float32 if mixed_precision_transformer else dtype)
         offload.change_dtype(self.model, dtype, True)
-        # offload.save_model(self.model, "sky_reels2_diffusion_forcing_1.3B_mbf16.safetensors", config_file_path="config.json") 
-        # offload.save_model(self.model, "sky_reels2_diffusion_forcing_720p_14B_quanto_mbf16_int8.safetensors", do_quantize= True, config_file_path="c:/temp/config _df720.json") 
-        # offload.save_model(self.model, "rtfp16_int8.safetensors", do_quantize= "config.json") 
+        # offload.save_model(self.model, "sky_reels2_diffusion_forcing_1.3B_mbf16.safetensors", config_file_path="config.json")
+        # offload.save_model(self.model, "sky_reels2_diffusion_forcing_720p_14B_quanto_mbf16_int8.safetensors", do_quantize= True, config_file_path="c:/temp/config _df720.json")
+        # offload.save_model(self.model, "rtfp16_int8.safetensors", do_quantize= "config.json")
 
         self.model.eval().requires_grad_(False)
 
@@ -217,7 +215,7 @@ class DTT2V:
         frame_num = max(17, frame_num) # must match causal_block_size for value of 5
         frame_num = int( round( (frame_num - 17) / 20)* 20 + 17 )
 
-        if ar_step == 0: 
+        if ar_step == 0:
             causal_block_size = 1
             causal_attention = False
 
@@ -311,7 +309,7 @@ class DTT2V:
             callback(-1, None, True, override_num_inference_steps = updated_num_steps)
         if self.model.enable_teacache:
             x_count = 2 if self.do_classifier_free_guidance else 1
-            self.model.previous_residual = [None] * x_count 
+            self.model.previous_residual = [None] * x_count
             time_steps_comb = []
             self.model.num_steps = updated_num_steps
             for i, timestep_i in enumerate(step_matrix):
@@ -323,7 +321,7 @@ class DTT2V:
             self.model.compute_teacache_threshold(self.model.teacache_start_step, time_steps_comb, self.model.teacache_multiplier)
             del time_steps_comb
         from mmgp import offload
-        freqs = get_rotary_pos_embed(latents.shape[1 :], enable_RIFLEx= False) 
+        freqs = get_rotary_pos_embed(latents.shape[1 :], enable_RIFLEx= False)
         kwrags = {
             "freqs" :freqs,
             "fps" : fps_embeds,
@@ -331,7 +329,7 @@ class DTT2V:
             "causal_attention" : causal_attention,
             "callback" : callback,
             "pipeline" : self,
-        }   
+        }
         kwrags.update(i2v_extra_kwrags)
 
         for i, timestep_i in enumerate(tqdm(step_matrix)):
@@ -356,10 +354,10 @@ class DTT2V:
                 timestep[:, valid_interval_start:predix_video_latent_length] = timestep_for_noised_condition
             kwrags.update({
                 "t" : timestep,
-                "current_step" : i,                 
+                "current_step" : i,
                 })
 
-            # with torch.autocast(device_type="cuda"):                
+            # with torch.autocast(device_type="cuda"):
             if True:
                 if not self.do_classifier_free_guidance:
                     noise_pred = self.model(
@@ -369,7 +367,7 @@ class DTT2V:
                     )[0]
                     if self._interrupt:
                         return None
-                    noise_pred= noise_pred.to(torch.float32)                                                                  
+                    noise_pred= noise_pred.to(torch.float32)
                 else:
                     if joint_pass:
                         noise_pred_cond, noise_pred_uncond = self.model(
@@ -378,7 +376,7 @@ class DTT2V:
                             **kwrags,
                         )
                         if self._interrupt:
-                            return None                
+                            return None
                     else:
                         noise_pred_cond = self.model(
                             x=[latent_model_input],
@@ -387,7 +385,7 @@ class DTT2V:
                             **kwrags,
                         )[0]
                         if self._interrupt:
-                            return None                
+                            return None
                         noise_pred_uncond = self.model(
                             x=[latent_model_input],
                             x_id=1,
@@ -409,7 +407,7 @@ class DTT2V:
                     )[0]
                     sample_schedulers_counter[idx] += 1
             if callback is not None:
-                callback(i, latents.squeeze(0), False)         
+                callback(i, latents.squeeze(0), False)
 
         x0 = latents.unsqueeze(0)
         videos = [self.vae.decode(x0, tile_size= VAE_tile_size)[0]]

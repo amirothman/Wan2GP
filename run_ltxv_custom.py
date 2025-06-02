@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Customizable LTX Video Generation Script
+"""Customizable LTX Video Generation Script
 ========================================
 
 This is an example of how to customize the minimal LTX Video generator
@@ -11,10 +10,20 @@ Usage:
 """
 
 # Import the main script components
-from run_ltxv import MinimalLTXV, save_video, setup_logging, get_device, seed_everything, check_model_files, create_output_directory
-import torch
-import time
 import sys
+import time
+
+import torch
+
+from run_ltxv import (
+    MinimalLTXV,
+    check_model_files,
+    create_output_directory,
+    get_device,
+    save_video,
+    seed_everything,
+    setup_logging,
+)
 
 # ============================================================================
 # CUSTOM CONFIGURATION EXAMPLES
@@ -82,34 +91,34 @@ def generate_custom_video(config, logger):
     logger.info(f"Prompt: {config['prompt']}")
     logger.info(f"Resolution: {config['width']}x{config['height']}")
     logger.info(f"Frames: {config['num_frames']} ({config['num_frames']/config['frame_rate']:.1f}s)")
-    
+
     # Temporarily modify the global constants in run_ltxv
     import run_ltxv
     original_values = {}
-    
+
     # Save original values
     for key in config:
         if hasattr(run_ltxv, key.upper()):
             original_values[key] = getattr(run_ltxv, key.upper())
             setattr(run_ltxv, key.upper(), config[key])
-    
+
     try:
         # Initialize model (reuse if already loaded)
         if not hasattr(generate_custom_video, 'model'):
             generate_custom_video.model = MinimalLTXV(logger)
-        
+
         model = generate_custom_video.model
-        
+
         # Set random seed
         seed_everything(config['seed'])
         device = get_device()
         generator = torch.Generator(device=device).manual_seed(config['seed'])
-        
+
         # Calculate padded dimensions
         height_padded = ((config['height'] - 1) // 32 + 1) * 32
         width_padded = ((config['width'] - 1) // 32 + 1) * 32
         num_frames_padded = ((config['num_frames'] - 2) // 8 + 1) * 8 + 1
-        
+
         # Calculate padding
         pad_height = height_padded - config['height']
         pad_width = width_padded - config['width']
@@ -118,7 +127,7 @@ def generate_custom_video(config, logger):
         pad_left = pad_width // 2
         pad_right = pad_width - pad_left
         padding = (pad_left, pad_right, pad_top, pad_bottom)
-        
+
         # Prepare sample
         sample = {
             "prompt": config['prompt'],
@@ -126,10 +135,10 @@ def generate_custom_video(config, logger):
             "negative_prompt": config['negative_prompt'],
             "negative_prompt_attention_mask": None,
         }
-        
+
         # Generate
         start_time = time.time()
-        
+
         images = model.pipeline(
             **model.config,
             num_inference_steps1=config['sampling_steps'],
@@ -151,30 +160,30 @@ def generate_custom_video(config, logger):
             mixed_precision=model.config.get("mixed", False),
             device=device,
         )
-        
+
         if images is None:
             raise RuntimeError("Generation failed - pipeline returned None")
-        
+
         generation_time = time.time() - start_time
         logger.info(f"Generation completed in {generation_time:.1f}s")
-        
+
         # Crop to desired dimensions
         (pad_left, pad_right, pad_top, pad_bottom) = padding
         pad_bottom = -pad_bottom if pad_bottom != 0 else images.shape[3]
         pad_right = -pad_right if pad_right != 0 else images.shape[4]
-        
+
         images = images[:, :, :config['num_frames'], pad_top:pad_bottom, pad_left:pad_right]
         images = images.sub_(0.5).mul_(2).squeeze(0)
-        
+
         # Save video
         save_video(images, config['output_path'], config['frame_rate'], logger)
-        
+
         return True
-        
+
     except Exception as e:
-        logger.error(f"Generation failed: {str(e)}")
+        logger.error(f"Generation failed: {e!s}")
         return False
-    
+
     finally:
         # Restore original values
         for key, value in original_values.items():
@@ -189,40 +198,40 @@ def main():
     print("=" * 60)
     print("🎬 Custom LTX Video Generator")
     print("=" * 60)
-    
+
     # Setup logging
     logger = setup_logging()
-    
+
     try:
         # Check prerequisites
         logger.info("Checking prerequisites...")
-        
+
         if not check_model_files(logger):
             return 1
-        
+
         create_output_directory()
-        
+
         # Available configurations
         configs = {
             "1": ("Cinematic Landscape", CONFIG_LANDSCAPE),
-            "2": ("Portrait Format", CONFIG_PORTRAIT), 
+            "2": ("Portrait Format", CONFIG_PORTRAIT),
             "3": ("Short Clip", CONFIG_SHORT),
             "4": ("Abstract Art", CONFIG_ABSTRACT),
             "5": ("Generate All", None)
         }
-        
+
         # Show menu
         print("\nAvailable configurations:")
         for key, (name, _) in configs.items():
             print(f"  {key}. {name}")
-        
+
         # Get user choice
         choice = input("\nSelect configuration (1-5): ").strip()
-        
+
         if choice not in configs:
             logger.error("Invalid choice")
             return 1
-        
+
         if choice == "5":
             # Generate all
             success_count = 0
@@ -237,7 +246,7 @@ def main():
                     logger.info(f"✓ {name} completed")
                 else:
                     logger.error(f"✗ {name} failed")
-            
+
             logger.info(f"\n🎉 Generated {success_count}/{len(configs)-1} videos successfully!")
         else:
             # Generate single video
@@ -248,14 +257,14 @@ def main():
             else:
                 logger.error(f"❌ {name} generation failed")
                 return 1
-        
+
         return 0
-        
+
     except KeyboardInterrupt:
         logger.info("Generation interrupted by user")
         return 1
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"Error: {e!s}")
         return 1
 
 if __name__ == "__main__":

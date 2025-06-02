@@ -1,9 +1,17 @@
-from typing import List, Iterable
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from collections.abc import Iterable
+from typing import List
 
-from .group_modules import MainToGroupDistributor, GroupResBlock, upsample_groups, GConv2d, downsample_groups
+import torch
+import torch.nn.functional as F
+from torch import nn
+
+from .group_modules import (
+    GConv2d,
+    GroupResBlock,
+    MainToGroupDistributor,
+    downsample_groups,
+    upsample_groups,
+)
 
 
 class UpsampleBlock(nn.Module):
@@ -32,7 +40,7 @@ class MaskUpsampleBlock(nn.Module):
         g = self.distributor(skip_f, g)
         g = self.out_conv(g)
         return g
-    
+
 
 class DecoderFeatureProcessor(nn.Module):
     def __init__(self, decoder_dims: List[int], out_dims: List[int]):
@@ -127,7 +135,7 @@ class SensoryDeepUpdater(nn.Module):
 
         return new_h
 
-  
+
 class ResBlock(nn.Module):
     def __init__(self, in_dim: int, out_dim: int):
         super().__init__()

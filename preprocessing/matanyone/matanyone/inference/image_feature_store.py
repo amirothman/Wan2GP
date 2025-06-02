@@ -1,18 +1,20 @@
 import warnings
-from typing import Iterable
+from collections.abc import Iterable
+
 import torch
+
 from ..model.matanyone import MatAnyone
 
 
 class ImageFeatureStore:
-    """
-    A cache for image features.
+    """A cache for image features.
     These features might be reused at different parts of the inference pipeline.
     This class provide an interface for reusing these features.
     It is the user's responsibility to delete redundant features.
 
     Feature of a frame should be associated with a unique index -- typically the frame id.
     """
+
     def __init__(self, network: MatAnyone, no_warning: bool = False):
         self.network = network
         self._store = {}
@@ -22,7 +24,7 @@ class ImageFeatureStore:
         ms_features, pix_feat = self.network.encode_image(image, last_feats=last_feats)
         key, shrinkage, selection = self.network.transform_key(ms_features[0])
         self._store[index] = (ms_features, pix_feat, key, shrinkage, selection)
-   
+
     def get_all_features(self, images: torch.Tensor) -> (Iterable[torch.Tensor], torch.Tensor):
         seq_length = images.shape[0]
         ms_features, pix_feat = self.network.encode_image(images, seq_length)

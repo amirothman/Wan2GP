@@ -4,8 +4,7 @@ log = logging.getLogger()
 
 
 def get_parameter_groups(model, stage_cfg, print_log=False):
-    """
-    Assign different weight decays and learning rates to different parameters.
+    """Assign different weight decays and learning rates to different parameters.
     Returns a parameter group which can be passed to the optimizer.
     """
     weight_decay = stage_cfg.weight_decay

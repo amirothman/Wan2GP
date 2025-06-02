@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 import torch
-import torch.nn as nn
+from torch import nn
 
 from .base_model import BaseModel
 from .blocks import FeatureFusionBlock_custom, Interpolate, _make_encoder

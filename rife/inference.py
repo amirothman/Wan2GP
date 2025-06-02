@@ -1,10 +1,11 @@
-import os
 import torch
 from torch.nn import functional as F
+
+from .RIFE_HDv3 import Model
+
 # from .model.pytorch_msssim import ssim_matlab
 from .ssim import ssim_matlab
 
-from .RIFE_HDv3 import Model
 
 def get_frame(frames, frame_no):
     if frame_no >= frames.shape[1]:
@@ -15,7 +16,7 @@ def get_frame(frames, frame_no):
 
 def add_frame(frames, frame, h, w):
     frame = (frame * 2) - 1
-    frame = frame.clip(-1., 1.)    
+    frame = frame.clip(-1., 1.)
     frame = frame.squeeze(0)
     frame = frame[:, :h, :w]
     frame = frame.unsqueeze(1)
@@ -38,8 +39,7 @@ def process_frames(model, device, frames, exp):
         second_half = make_inference(middle, I1, n=n//2)
         if n%2:
             return [*first_half, middle, *second_half]
-        else:
-            return [*first_half, *second_half]
+        return [*first_half, *second_half]
 
     tmp = max(32, int(32 / scale))
     ph = ((h - 1) // tmp + 1) * tmp
@@ -49,8 +49,7 @@ def process_frames(model, device, frames, exp):
     def pad_image(img):
         if(fp16):
             return F.pad(img, padding).half()
-        else:
-            return F.pad(img, padding)
+        return F.pad(img, padding)
 
     I1 = lastframe.to(device, non_blocking=True).unsqueeze(0)
     I1 = pad_image(I1)
@@ -73,7 +72,7 @@ def process_frames(model, device, frames, exp):
         ssim = ssim_matlab(I0_small[:, :3], I1_small[:, :3])
 
         break_flag = False
-        if ssim > 0.996 or pos > 100:        
+        if ssim > 0.996 or pos > 100:
             pos += 1
             frame = get_frame(frames, pos)
             if frame is None:
@@ -87,7 +86,7 @@ def process_frames(model, device, frames, exp):
             I1_small = F.interpolate(I1, (32, 32), mode='bilinear', align_corners=False)
             ssim = ssim_matlab(I0_small[:, :3], I1_small[:, :3])
             frame = I1[0][:, :h, :w]
-        
+
         if ssim < 0.2:
             output = []
             for _ in range((2 ** exp) - 1):
@@ -113,7 +112,7 @@ def temporal_interpolation(model_path, frames, exp, device ="cuda"):
     model.eval()
     model.to(device=device)
 
-    with torch.no_grad():    
+    with torch.no_grad():
         output = process_frames(model, device, frames.float(), exp)
 
     return output

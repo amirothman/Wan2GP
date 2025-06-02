@@ -1,13 +1,13 @@
-from typing import Optional, Union
-from pathlib import Path
-import os
 import json
+import os
+from pathlib import Path
+from typing import Optional, Union
 
 import torch
-import torch.nn as nn
-from einops import rearrange
 from diffusers import ConfigMixin, ModelMixin
+from einops import rearrange
 from safetensors.torch import safe_open
+from torch import nn
 
 from ltx_video.models.autoencoders.pixel_shuffle import PixelShuffleND
 
@@ -40,8 +40,7 @@ class ResBlock(nn.Module):
 
 
 class LatentUpsampler(ModelMixin, ConfigMixin):
-    """
-    Model to spatially upsample VAE latents.
+    """Model to spatially upsample VAE latents.
 
     Args:
         in_channels (`int`): Number of channels in the input latent
@@ -50,6 +49,7 @@ class LatentUpsampler(ModelMixin, ConfigMixin):
         dims (`int`): Number of dimensions for convolutions (2 or 3)
         spatial_upsample (`bool`): Whether to spatially upsample the latent
         temporal_upsample (`bool`): Whether to temporally upsample the latent
+
     """
 
     def __init__(

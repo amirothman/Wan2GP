@@ -19,8 +19,9 @@ from diffusers.utils import deprecate, logging
 from diffusers.utils.torch_utils import maybe_allow_in_graph
 from einops import rearrange
 from torch import nn
-from wan.modules.attention import pay_attention
+
 from ltx_video.utils.skip_layer_strategy import SkipLayerStrategy
+from wan.modules.attention import pay_attention
 
 try:
     from torch_xla.experimental.custom_kernel import flash_attention
@@ -35,7 +36,7 @@ logger = logging.get_logger(__name__)
 
 def reshape_hidden_states(hidden_states, latent_frames):
     return hidden_states.reshape(hidden_states.shape[0], latent_frames, -1, hidden_states.shape[-1] )
-	
+
 
 def restore_hidden_states_shape(hidden_states):
     return hidden_states.reshape(hidden_states.shape[0], -1, hidden_states.shape[-1] )
@@ -43,10 +44,10 @@ def restore_hidden_states_shape(hidden_states):
 
 @maybe_allow_in_graph
 class BasicTransformerBlock(nn.Module):
-    r"""
-    A basic Transformer block.
+    r"""A basic Transformer block.
 
-    Parameters:
+    Parameters
+    ----------
         dim (`int`): The number of channels in the input and output.
         num_attention_heads (`int`): The number of heads to use for multi-head attention.
         attention_head_dim (`int`): The number of channels in each head.
@@ -79,6 +80,7 @@ class BasicTransformerBlock(nn.Module):
             The type of positional embeddings to apply to.
         num_positional_embeddings (`int`, *optional*, defaults to `None`):
             The maximum number of positional embeddings to apply.
+
     """
 
     def __init__(
@@ -189,8 +191,7 @@ class BasicTransformerBlock(nn.Module):
         self._chunk_dim = 0
 
     def set_use_tpu_flash_attention(self):
-        r"""
-        Function sets the flag in this object and propagates down the children. The flag will enforce the usage of TPU
+        r"""Function sets the flag in this object and propagates down the children. The flag will enforce the usage of TPU
         attention kernel.
         """
         self.use_tpu_flash_attention = True
@@ -217,7 +218,7 @@ class BasicTransformerBlock(nn.Module):
         skip_layer_strategy: Optional[SkipLayerStrategy] = None,
     ) -> torch.FloatTensor:
         if cross_attention_kwargs is not None:
-            if cross_attention_kwargs.get("scale", None) is not None:
+            if cross_attention_kwargs.get("scale") is not None:
                 logger.warning(
                     "Passing `scale` to `cross_attention_kwargs` is depcrecated. `scale` will be ignored."
                 )
@@ -245,7 +246,7 @@ class BasicTransformerBlock(nn.Module):
                     ada_values.unbind(dim=2)
                 )
                 norm_hidden_states = reshape_hidden_states(norm_hidden_states, scale_msa.shape[1])
-                norm_hidden_states *= 1 + scale_msa 
+                norm_hidden_states *= 1 + scale_msa
                 norm_hidden_states += shift_msa
                 # norm_hidden_states = norm_hidden_states * (1 + scale_msa) + shift_msa
                 norm_hidden_states = restore_hidden_states_shape(norm_hidden_states)
@@ -282,7 +283,7 @@ class BasicTransformerBlock(nn.Module):
         if gate_msa is not None:
             attn_output = reshape_hidden_states(attn_output, gate_msa.shape[1])
             # attn_output = gate_msa * attn_output
-            attn_output *= gate_msa 
+            attn_output *= gate_msa
             attn_output = restore_hidden_states_shape(attn_output)
 
         hidden_states += attn_output
@@ -307,7 +308,7 @@ class BasicTransformerBlock(nn.Module):
                 attention_mask=encoder_attention_mask,
                 **cross_attention_kwargs,
             )
-            hidden_states += attn_output 
+            hidden_states += attn_output
             del attn_output
 
         # 4. Feed-forward
@@ -338,7 +339,7 @@ class BasicTransformerBlock(nn.Module):
             for h_chunk  in chunks:
                 mlp_chunk = self.ff.net[0](h_chunk)
                 h_chunk[...] = self.ff.net[2](mlp_chunk)
-                del mlp_chunk 
+                del mlp_chunk
             ff_output = norm_hidden_states.view(h_shape)
             del norm_hidden_states
 
@@ -366,10 +367,10 @@ class BasicTransformerBlock(nn.Module):
 
 @maybe_allow_in_graph
 class Attention(nn.Module):
-    r"""
-    A cross attention layer.
+    r"""A cross attention layer.
 
-    Parameters:
+    Parameters
+    ----------
         query_dim (`int`):
             The number of channels in the query.
         cross_attention_dim (`int`, *optional*):
@@ -416,6 +417,7 @@ class Attention(nn.Module):
         processor (`AttnProcessor`, *optional*, defaults to `None`):
             The attention processor to use. If `None`, defaults to `AttnProcessor2_0` if `torch 2.x` is used and
             `AttnProcessor` otherwise.
+
     """
 
     def __init__(
@@ -567,18 +569,17 @@ class Attention(nn.Module):
         self.set_processor(processor)
 
     def set_use_tpu_flash_attention(self):
-        r"""
-        Function sets the flag in this object. The flag will enforce the usage of TPU attention kernel.
+        r"""Function sets the flag in this object. The flag will enforce the usage of TPU attention kernel.
         """
         self.use_tpu_flash_attention = True
 
     def set_processor(self, processor: "AttnProcessor") -> None:
-        r"""
-        Set the attention processor to use.
+        r"""Set the attention processor to use.
 
         Args:
             processor (`AttnProcessor`):
                 The attention processor to use.
+
         """
         # if current processor is in `self._modules` and if passed `processor` is not, we need to
         # pop `processor` from `self._modules`
@@ -597,8 +598,7 @@ class Attention(nn.Module):
     def get_processor(
         self, return_deprecated_lora: bool = False
     ) -> "AttentionProcessor":  # noqa: F821
-        r"""
-        Get the attention processor in use.
+        r"""Get the attention processor in use.
 
         Args:
             return_deprecated_lora (`bool`, *optional*, defaults to `False`):
@@ -606,6 +606,7 @@ class Attention(nn.Module):
 
         Returns:
             "AttentionProcessor": The attention processor in use.
+
         """
         if not return_deprecated_lora:
             return self.processor
@@ -710,8 +711,7 @@ class Attention(nn.Module):
         skip_layer_strategy: Optional[SkipLayerStrategy] = None,
         **cross_attention_kwargs,
     ) -> torch.Tensor:
-        r"""
-        The forward method of the `Attention` class.
+        r"""The forward method of the `Attention` class.
 
         Args:
             hidden_states (`torch.Tensor`):
@@ -729,6 +729,7 @@ class Attention(nn.Module):
 
         Returns:
             `torch.Tensor`: The output of the attention layer.
+
         """
         # The `Attention` class can call different attention processors / attention functions
         # here we simply pass along all tensors to the selected processor class
@@ -761,8 +762,7 @@ class Attention(nn.Module):
         )
 
     def batch_to_head_dim(self, tensor: torch.Tensor) -> torch.Tensor:
-        r"""
-        Reshape the tensor from `[batch_size, seq_len, dim]` to `[batch_size // heads, seq_len, dim * heads]`. `heads`
+        r"""Reshape the tensor from `[batch_size, seq_len, dim]` to `[batch_size // heads, seq_len, dim * heads]`. `heads`
         is the number of heads initialized while constructing the `Attention` class.
 
         Args:
@@ -770,6 +770,7 @@ class Attention(nn.Module):
 
         Returns:
             `torch.Tensor`: The reshaped tensor.
+
         """
         head_size = self.heads
         batch_size, seq_len, dim = tensor.shape
@@ -780,8 +781,7 @@ class Attention(nn.Module):
         return tensor
 
     def head_to_batch_dim(self, tensor: torch.Tensor, out_dim: int = 3) -> torch.Tensor:
-        r"""
-        Reshape the tensor from `[batch_size, seq_len, dim]` to `[batch_size, seq_len, heads, dim // heads]` `heads` is
+        r"""Reshape the tensor from `[batch_size, seq_len, dim]` to `[batch_size, seq_len, heads, dim // heads]` `heads` is
         the number of heads initialized while constructing the `Attention` class.
 
         Args:
@@ -791,8 +791,8 @@ class Attention(nn.Module):
 
         Returns:
             `torch.Tensor`: The reshaped tensor.
-        """
 
+        """
         head_size = self.heads
         if tensor.ndim == 3:
             batch_size, seq_len, dim = tensor.shape
@@ -817,8 +817,7 @@ class Attention(nn.Module):
         key: torch.Tensor,
         attention_mask: torch.Tensor = None,
     ) -> torch.Tensor:
-        r"""
-        Compute the attention scores.
+        r"""Compute the attention scores.
 
         Args:
             query (`torch.Tensor`): The query tensor.
@@ -827,6 +826,7 @@ class Attention(nn.Module):
 
         Returns:
             `torch.Tensor`: The attention probabilities/scores.
+
         """
         dtype = query.dtype
         if self.upcast_attention:
@@ -872,8 +872,7 @@ class Attention(nn.Module):
         batch_size: int,
         out_dim: int = 3,
     ) -> torch.Tensor:
-        r"""
-        Prepare the attention mask for the attention computation.
+        r"""Prepare the attention mask for the attention computation.
 
         Args:
             attention_mask (`torch.Tensor`):
@@ -887,6 +886,7 @@ class Attention(nn.Module):
 
         Returns:
             `torch.Tensor`: The prepared attention mask.
+
         """
         head_size = self.heads
         if attention_mask is None:
@@ -927,8 +927,7 @@ class Attention(nn.Module):
     def norm_encoder_hidden_states(
         self, encoder_hidden_states: torch.Tensor
     ) -> torch.Tensor:
-        r"""
-        Normalize the encoder hidden states. Requires `self.norm_cross` to be specified when constructing the
+        r"""Normalize the encoder hidden states. Requires `self.norm_cross` to be specified when constructing the
         `Attention` class.
 
         Args:
@@ -936,6 +935,7 @@ class Attention(nn.Module):
 
         Returns:
             `torch.Tensor`: The normalized encoder hidden states.
+
         """
         assert (
             self.norm_cross is not None
@@ -976,8 +976,7 @@ class Attention(nn.Module):
 
 
 class AttnProcessor2_0:
-    r"""
-    Processor for implementing scaled dot-product attention (enabled by default if you're using PyTorch 2.0).
+    r"""Processor for implementing scaled dot-product attention (enabled by default if you're using PyTorch 2.0).
     """
 
     def __init__(self):
@@ -996,7 +995,7 @@ class AttnProcessor2_0:
         *args,
         **kwargs,
     ) -> torch.FloatTensor:
-        if len(args) > 0 or kwargs.get("scale", None) is not None:
+        if len(args) > 0 or kwargs.get("scale") is not None:
             deprecation_message = "The `scale` argument is deprecated and will be ignored. Please remove it, as passing it will raise an error in the future. `scale` should directly be passed while calling the underlying pipeline component i.e., via `cross_attention_kwargs`."
             deprecate("scale", "1.0.0", deprecation_message)
         hidden_states = hidden_states_wrapper[0]
@@ -1174,8 +1173,7 @@ class AttnProcessor2_0:
 
 
 class AttnProcessor:
-    r"""
-    Default processor for performing attention-related computations.
+    r"""Default processor for performing attention-related computations.
     """
 
     def __call__(
@@ -1188,7 +1186,7 @@ class AttnProcessor:
         *args,
         **kwargs,
     ) -> torch.Tensor:
-        if len(args) > 0 or kwargs.get("scale", None) is not None:
+        if len(args) > 0 or kwargs.get("scale") is not None:
             deprecation_message = "The `scale` argument is deprecated and will be ignored. Please remove it, as passing it will raise an error in the future. `scale` should directly be passed while calling the underlying pipeline component i.e., via `cross_attention_kwargs`."
             deprecate("scale", "1.0.0", deprecation_message)
 
@@ -1261,10 +1259,10 @@ class AttnProcessor:
 
 
 class FeedForward(nn.Module):
-    r"""
-    A feed-forward layer.
+    r"""A feed-forward layer.
 
-    Parameters:
+    Parameters
+    ----------
         dim (`int`): The number of channels in the input.
         dim_out (`int`, *optional*): The number of channels in the output. If not given, defaults to `dim`.
         mult (`int`, *optional*, defaults to 4): The multiplier to use for the hidden dimension.
@@ -1272,6 +1270,7 @@ class FeedForward(nn.Module):
         activation_fn (`str`, *optional*, defaults to `"geglu"`): Activation function to be used in feed-forward.
         final_dropout (`bool` *optional*, defaults to False): Apply a final dropout.
         bias (`bool`, defaults to True): Whether to use a bias in the linear layer.
+
     """
 
     def __init__(

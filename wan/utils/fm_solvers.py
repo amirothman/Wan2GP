@@ -9,9 +9,11 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import torch
 from diffusers.configuration_utils import ConfigMixin, register_to_config
-from diffusers.schedulers.scheduling_utils import (KarrasDiffusionSchedulers,
-                                                   SchedulerMixin,
-                                                   SchedulerOutput)
+from diffusers.schedulers.scheduling_utils import (
+    KarrasDiffusionSchedulers,
+    SchedulerMixin,
+    SchedulerOutput,
+)
 from diffusers.utils import deprecate, is_scipy_available
 from diffusers.utils.torch_utils import randn_tensor
 
@@ -67,10 +69,10 @@ def retrieve_timesteps(
 
 
 class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
-    """
-    `FlowDPMSolverMultistepScheduler` is a fast dedicated high-order solver for diffusion ODEs.
+    """`FlowDPMSolverMultistepScheduler` is a fast dedicated high-order solver for diffusion ODEs.
     This model inherits from [`SchedulerMixin`] and [`ConfigMixin`]. Check the superclass documentation for the generic
     methods the library implements for all schedulers such as loading and saving.
+
     Args:
         num_train_timesteps (`int`, defaults to 1000):
             The number of diffusion steps to train the model. This determines the resolution of the diffusion process.
@@ -120,6 +122,7 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         variance_type (`str`, *optional*):
             Set to "learned" or "learned_range" for diffusion models that predict variance. If set, the model's output
             contains the predicted Gaussian variance.
+
     """
 
     _compatibles = [e.name for e in KarrasDiffusionSchedulers]
@@ -200,25 +203,24 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     @property
     def step_index(self):
-        """
-        The index counter for current timestep. It will increase 1 after each scheduler step.
+        """The index counter for current timestep. It will increase 1 after each scheduler step.
         """
         return self._step_index
 
     @property
     def begin_index(self):
-        """
-        The index for the first timestep. It should be set from pipeline with `set_begin_index` method.
+        """The index for the first timestep. It should be set from pipeline with `set_begin_index` method.
         """
         return self._begin_index
 
     # Copied from diffusers.schedulers.scheduling_dpmsolver_multistep.DPMSolverMultistepScheduler.set_begin_index
     def set_begin_index(self, begin_index: int = 0):
-        """
-        Sets the begin index for the scheduler. This function should be run from pipeline before the inference.
+        """Sets the begin index for the scheduler. This function should be run from pipeline before the inference.
+
         Args:
             begin_index (`int`):
                 The begin index for the scheduler.
+
         """
         self._begin_index = begin_index
 
@@ -231,15 +233,15 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         mu: Optional[Union[float, None]] = None,
         shift: Optional[Union[float, None]] = None,
     ):
-        """
-        Sets the discrete timesteps used for the diffusion chain (to be run before inference).
+        """Sets the discrete timesteps used for the diffusion chain (to be run before inference).
+
         Args:
             num_inference_steps (`int`):
                 Total number of the spacing of the time steps.
             device (`str` or `torch.device`, *optional*):
                 The device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
-        """
 
+        """
         if self.config.use_dynamic_shifting and mu is None:
             raise ValueError(
                 " you have to pass a value for `mu` when `use_dynamic_shifting` is set to be `True`"
@@ -290,8 +292,7 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     # Copied from diffusers.schedulers.scheduling_ddpm.DDPMScheduler._threshold_sample
     def _threshold_sample(self, sample: torch.Tensor) -> torch.Tensor:
-        """
-        "Dynamic thresholding: At each sampling step we set s to a certain percentile absolute pixel value in xt0 (the
+        """"Dynamic thresholding: At each sampling step we set s to a certain percentile absolute pixel value in xt0 (the
         prediction of x_0 at timestep t), and if s > 1, then we threshold xt0 to the range [-s, s] and then divide by
         s. Dynamic thresholding pushes saturated pixels (those near -1 and 1) inwards, thereby actively preventing
         pixels from saturation at each step. We find that dynamic thresholding results in significantly better
@@ -345,8 +346,7 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         sample: torch.Tensor = None,
         **kwargs,
     ) -> torch.Tensor:
-        """
-        Convert the model output to the corresponding type the DPMSolver/DPMSolver++ algorithm needs. DPM-Solver is
+        """Convert the model output to the corresponding type the DPMSolver/DPMSolver++ algorithm needs. DPM-Solver is
         designed to discretize an integral of the noise prediction model, and DPM-Solver++ is designed to discretize an
         integral of the data prediction model.
         <Tip>
@@ -358,9 +358,11 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
                 The direct output from the learned diffusion model.
             sample (`torch.Tensor`):
                 A current instance of a sample created by the diffusion process.
+
         Returns:
             `torch.Tensor`:
                 The converted model output.
+
         """
         timestep = args[0] if len(args) > 0 else kwargs.pop("timestep", None)
         if sample is None:
@@ -393,7 +395,7 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
             return x0_pred
 
         # DPM-Solver needs to solve an integral of the noise prediction model.
-        elif self.config.algorithm_type in ["dpmsolver", "sde-dpmsolver"]:
+        if self.config.algorithm_type in ["dpmsolver", "sde-dpmsolver"]:
             if self.config.prediction_type == "flow_prediction":
                 sigma_t = self.sigmas[self.step_index]
                 epsilon = sample - (1 - sigma_t) * model_output
@@ -420,16 +422,18 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         noise: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> torch.Tensor:
-        """
-        One step for the first-order DPMSolver (equivalent to DDIM).
+        """One step for the first-order DPMSolver (equivalent to DDIM).
+
         Args:
             model_output (`torch.Tensor`):
                 The direct output from the learned diffusion model.
             sample (`torch.Tensor`):
                 A current instance of a sample created by the diffusion process.
+
         Returns:
             `torch.Tensor`:
                 The sample tensor at the previous timestep.
+
         """
         timestep = args[0] if len(args) > 0 else kwargs.pop("timestep", None)
         prev_timestep = args[1] if len(args) > 1 else kwargs.pop(
@@ -491,16 +495,18 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         noise: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> torch.Tensor:
-        """
-        One step for the second-order multistep DPMSolver.
+        """One step for the second-order multistep DPMSolver.
+
         Args:
             model_output_list (`List[torch.Tensor]`):
                 The direct outputs from learned diffusion model at current and latter timesteps.
             sample (`torch.Tensor`):
                 A current instance of a sample created by the diffusion process.
+
         Returns:
             `torch.Tensor`:
                 The sample tensor at the previous timestep.
+
         """
         timestep_list = args[0] if len(args) > 0 else kwargs.pop(
             "timestep_list", None)
@@ -600,18 +606,19 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         sample: torch.Tensor = None,
         **kwargs,
     ) -> torch.Tensor:
-        """
-        One step for the third-order multistep DPMSolver.
+        """One step for the third-order multistep DPMSolver.
+
         Args:
             model_output_list (`List[torch.Tensor]`):
                 The direct outputs from learned diffusion model at current and latter timesteps.
             sample (`torch.Tensor`):
                 A current instance of a sample created by diffusion process.
+
         Returns:
             `torch.Tensor`:
                 The sample tensor at the previous timestep.
-        """
 
+        """
         timestep_list = args[0] if len(args) > 0 else kwargs.pop(
             "timestep_list", None)
         prev_timestep = args[1] if len(args) > 1 else kwargs.pop(
@@ -691,10 +698,8 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         return indices[pos].item()
 
     def _init_step_index(self, timestep):
+        """Initialize the step_index counter for the scheduler.
         """
-        Initialize the step_index counter for the scheduler.
-        """
-
         if self.begin_index is None:
             if isinstance(timestep, torch.Tensor):
                 timestep = timestep.to(self.timesteps.device)
@@ -712,9 +717,9 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         variance_noise: Optional[torch.Tensor] = None,
         return_dict: bool = True,
     ) -> Union[SchedulerOutput, Tuple]:
-        """
-        Predict the sample from the previous timestep by reversing the SDE. This function propagates the sample with
+        """Predict the sample from the previous timestep by reversing the SDE. This function propagates the sample with
         the multistep DPMSolver.
+
         Args:
             model_output (`torch.Tensor`):
                 The direct output from learned diffusion model.
@@ -729,10 +734,12 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
                 itself. Useful for methods such as [`LEdits++`].
             return_dict (`bool`):
                 Whether or not to return a [`~schedulers.scheduling_utils.SchedulerOutput`] or `tuple`.
+
         Returns:
             [`~schedulers.scheduling_utils.SchedulerOutput`] or `tuple`:
                 If return_dict is `True`, [`~schedulers.scheduling_utils.SchedulerOutput`] is returned, otherwise a
                 tuple is returned where the first element is the sample tensor.
+
         """
         if self.num_inference_steps is None:
             raise ValueError(
@@ -799,15 +806,17 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
     # Copied from diffusers.schedulers.scheduling_dpmsolver_multistep.DPMSolverMultistepScheduler.scale_model_input
     def scale_model_input(self, sample: torch.Tensor, *args,
                           **kwargs) -> torch.Tensor:
-        """
-        Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
+        """Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
         current timestep.
+
         Args:
             sample (`torch.Tensor`):
                 The input sample.
+
         Returns:
             `torch.Tensor`:
                 A scaled input sample.
+
         """
         return sample
 

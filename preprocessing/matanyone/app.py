@@ -1,25 +1,22 @@
-import sys
 
-import os
 import json
+import os
 import time
-import psutil
-# import ffmpeg
-import imageio
-from PIL import Image
 
 import cv2
-import torch
-import numpy as np
 import gradio as gr
-from .tools.painter import mask_painter
-from .tools.interact_tools import SamControler
-from .tools.misc import get_device
-from .tools.download_util import load_file_from_url
 
-from .utils.get_default_model import get_matanyone_model
+# import ffmpeg
+import imageio
+import numpy as np
+import psutil
+import torch
+from PIL import Image
+
 from .matanyone.inference.inference_core import InferenceCore
 from .matanyone_wrapper import matanyone
+from .tools.interact_tools import SamControler
+from .tools.painter import mask_painter
 
 arg_device = "cuda"
 arg_sam_model_type="vit_h"
@@ -29,16 +26,16 @@ model = None
 matanyone_model = None
 
 # SAM generator
-class MaskGenerator():
+class MaskGenerator:
     def __init__(self, sam_checkpoint, device):
         global args_device
         args_device  = device
         self.samcontroler = SamControler(sam_checkpoint, arg_sam_model_type, arg_device)
-       
+
     def first_frame_click(self, image: np.ndarray, points:np.ndarray, labels: np.ndarray, multimask=True):
         mask, logit, painted_image = self.samcontroler.first_frame_click(image, points, labels, multimask)
         return mask, logit, painted_image
-    
+
 # convert points input to prompt state
 def get_prompt(click_state, click_input):
     inputs = json.loads(click_input)
@@ -58,17 +55,16 @@ def get_prompt(click_state, click_input):
     return prompt
 
 def get_frames_from_image(image_input, image_state):
-    """
-    Args:
+    """Args:
         video_path:str
         timestamp:float64
     Return 
         [[0:nearest_frame], [nearest_frame:], nearest_frame]
-    """
 
+    """
     user_name = time.time()
     frames = [image_input] * 2  # hardcode: mimic a video with 2 frames
-    image_size = (frames[0].shape[0],frames[0].shape[1]) 
+    image_size = (frames[0].shape[0],frames[0].shape[1])
     # initialize video_state
     image_state = {
         "user_name": user_name,
@@ -81,8 +77,8 @@ def get_frames_from_image(image_input, image_state):
         "last_frame_numer": 0,
         "fps": None
         }
-    image_info = "Image Name: N/A,\nFPS: N/A,\nTotal Frames: {},\nImage Size:{}".format(len(frames), image_size)
-    model.samcontroler.sam_controler.reset_image() 
+    image_info = f"Image Name: N/A,\nFPS: N/A,\nTotal Frames: {len(frames)},\nImage Size:{image_size}"
+    model.samcontroler.sam_controler.reset_image()
     model.samcontroler.sam_controler.set_image(image_state["origin_images"][0])
     return image_state, image_info, image_state["origin_images"][0], \
                         gr.update(visible=True, maximum=10, value=10), gr.update(visible=False, maximum=len(frames), value=len(frames)), \
@@ -95,17 +91,16 @@ def get_frames_from_image(image_input, image_state):
 
 # extract frames from upload video
 def get_frames_from_video(video_input, video_state):
-    """
-    Args:
+    """Args:
         video_path:str
         timestamp:float64
     Return 
         [[0:nearest_frame], [nearest_frame:], nearest_frame]
-    """
 
+    """
     while model == None:
         time.sleep(1)
-        
+
     video_path = video_input
     frames = []
     user_name = time.time()
@@ -118,7 +113,7 @@ def get_frames_from_video(video_input, video_state):
     #     print(f"Audio extraction error: {str(e)}")
     #     audio_path = ""  # Set to "" if extraction fails
     # print(f'audio_path: {audio_path}')
-    audio_path = ""     
+    audio_path = ""
     # extract frames
     try:
         cap = cv2.VideoCapture(video_path)
@@ -133,8 +128,8 @@ def get_frames_from_video(video_input, video_state):
             else:
                 break
     except (OSError, TypeError, ValueError, KeyError, SyntaxError) as e:
-        print("read_frame_source:{} error. {}\n".format(video_path, str(e)))
-    image_size = (frames[0].shape[0],frames[0].shape[1]) 
+        print(f"read_frame_source:{video_path} error. {e!s}\n")
+    image_size = (frames[0].shape[0],frames[0].shape[1])
 
     # resize if resolution too big
     if image_size[0]>=1280 and image_size[0]>=1280:
@@ -144,7 +139,7 @@ def get_frames_from_video(video_input, video_state):
         # update frames
         frames = [cv2.resize(f, (new_w, new_h), interpolation=cv2.INTER_AREA) for f in frames]
         # update image_size
-        image_size = (frames[0].shape[0],frames[0].shape[1]) 
+        image_size = (frames[0].shape[0],frames[0].shape[1])
 
     # initialize video_state
     video_state = {
@@ -160,7 +155,7 @@ def get_frames_from_video(video_input, video_state):
         "audio": audio_path
         }
     video_info = "Video Name: {},\nFPS: {},\nTotal Frames: {},\nImage Size:{}".format(video_state["video_name"], round(video_state["fps"], 0), len(frames), image_size)
-    model.samcontroler.sam_controler.reset_image() 
+    model.samcontroler.sam_controler.reset_image()
     model.samcontroler.sam_controler.set_image(video_state["origin_images"][0])
     return video_state, video_info, video_state["origin_images"][0], \
                         gr.update(visible=True, maximum=len(frames), value=1), gr.update(visible=True, maximum=len(frames), value=len(frames)), gr.update(visible=False, maximum=len(frames), value=len(frames)), \
@@ -201,27 +196,27 @@ def get_end_number(track_pause_number_slider, video_state, interactive_state):
     return video_state["painted_images"][track_pause_number_slider],interactive_state
 
 # use sam to get the mask
-def sam_refine(video_state, point_prompt, click_state, interactive_state, evt:gr.SelectData ): #
-    """
-    Args:
-        template_frame: PIL.Image
-        point_prompt: flag for positive or negative button click
-        click_state: [[points], [labels]]
+def sam_refine(video_state, point_prompt, click_state, interactive_state, evt:gr.SelectData ):
+    """Args:
+    template_frame: PIL.Image
+    point_prompt: flag for positive or negative button click
+    click_state: [[points], [labels]]
+
     """
     if point_prompt == "Positive":
-        coordinate = "[[{},{},1]]".format(evt.index[0], evt.index[1])
+        coordinate = f"[[{evt.index[0]},{evt.index[1]},1]]"
         interactive_state["positive_click_times"] += 1
     else:
-        coordinate = "[[{},{},0]]".format(evt.index[0], evt.index[1])
+        coordinate = f"[[{evt.index[0]},{evt.index[1]},0]]"
         interactive_state["negative_click_times"] += 1
-    
+
     # prompt for sam model
     model.samcontroler.sam_controler.reset_image()
     model.samcontroler.sam_controler.set_image(video_state["origin_images"][video_state["select_frame_number"]])
     prompt = get_prompt(click_state=click_state, click_input=coordinate)
 
-    mask, logit, painted_image = model.first_frame_click( 
-                                                      image=video_state["origin_images"][video_state["select_frame_number"]], 
+    mask, logit, painted_image = model.first_frame_click(
+                                                      image=video_state["origin_images"][video_state["select_frame_number"]],
                                                       points=np.array(prompt["input_point"]),
                                                       labels=np.array(prompt["input_label"]),
                                                       multimask=prompt["multimask_output"],
@@ -260,7 +255,7 @@ def show_mask(video_state, interactive_state, mask_dropdown):
             mask_number = int(mask_dropdown[i].split("_")[1]) - 1
             mask = interactive_state["multi_mask"]["masks"][mask_number]
             select_frame = mask_painter(select_frame, mask.astype('uint8'), mask_color=mask_number+2)
-        
+
         return select_frame
 
 
@@ -287,10 +282,10 @@ def image_matting(video_state, interactive_state, mask_dropdown, erode_kernel_si
         mask_dropdown.sort()
         template_mask = interactive_state["multi_mask"]["masks"][int(mask_dropdown[0].split("_")[1]) - 1] * (int(mask_dropdown[0].split("_")[1]))
         for i in range(1,len(mask_dropdown)):
-            mask_number = int(mask_dropdown[i].split("_")[1]) - 1 
+            mask_number = int(mask_dropdown[i].split("_")[1]) - 1
             template_mask = np.clip(template_mask+interactive_state["multi_mask"]["masks"][mask_number]*(mask_number+1), 0, mask_number+1)
         video_state["masks"][video_state["select_frame_number"]]= template_mask
-    else:      
+    else:
         template_mask = video_state["masks"][video_state["select_frame_number"]]
 
     # operation error
@@ -300,7 +295,7 @@ def image_matting(video_state, interactive_state, mask_dropdown, erode_kernel_si
 
 
     foreground_mat = False
-    
+
     output_frames = []
     for frame_origin, frame_alpha in zip(following_frames, alpha):
         if foreground_mat:
@@ -322,7 +317,7 @@ def image_matting(video_state, interactive_state, mask_dropdown, erode_kernel_si
     foreground_output = Image.fromarray(foreground[-1])
     alpha_output = Image.fromarray(alpha[-1][:,:,0])
 
-    return foreground_output, gr.update(visible=True) 
+    return foreground_output, gr.update(visible=True)
 
 # video matting
 def video_matting(video_state, end_slider, matting_type, interactive_state, mask_dropdown, erode_kernel_size, dilate_kernel_size):
@@ -339,10 +334,10 @@ def video_matting(video_state, end_slider, matting_type, interactive_state, mask
         mask_dropdown.sort()
         template_mask = interactive_state["multi_mask"]["masks"][int(mask_dropdown[0].split("_")[1]) - 1] * (int(mask_dropdown[0].split("_")[1]))
         for i in range(1,len(mask_dropdown)):
-            mask_number = int(mask_dropdown[i].split("_")[1]) - 1 
+            mask_number = int(mask_dropdown[i].split("_")[1]) - 1
             template_mask = np.clip(template_mask+interactive_state["multi_mask"]["masks"][mask_number]*(mask_number+1), 0, mask_number+1)
         video_state["masks"][video_state["select_frame_number"]]= template_mask
-    else:      
+    else:
         template_mask = video_state["masks"][video_state["select_frame_number"]]
     fps = video_state["fps"]
 
@@ -374,10 +369,10 @@ def video_matting(video_state, end_slider, matting_type, interactive_state, mask
         os.makedirs("mask_outputs")
 
     file_name= video_state["video_name"]
-    file_name = ".".join(file_name.split(".")[:-1]) 
-    foreground_output = save_video(foreground, output_path="./mask_outputs/{}_fg.mp4".format(file_name), fps=fps)
+    file_name = ".".join(file_name.split(".")[:-1])
+    foreground_output = save_video(foreground, output_path=f"./mask_outputs/{file_name}_fg.mp4", fps=fps)
     # foreground_output = generate_video_from_frames(foreground, output_path="./results/{}_fg.mp4".format(video_state["video_name"]), fps=fps, audio_path=audio_path) # import video_input to name the output video
-    alpha_output = save_video(alpha, output_path="./mask_outputs/{}_alpha.mp4".format(file_name), fps=fps)
+    alpha_output = save_video(alpha, output_path=f"./mask_outputs/{file_name}_alpha.mp4", fps=fps)
     # alpha_output = generate_video_from_frames(alpha, output_path="./results/{}_alpha.mp4".format(video_state["video_name"]), fps=fps, gray2rgb=True, audio_path=audio_path) # import video_input to name the output video
 
     return foreground_output, alpha_output, gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)
@@ -403,13 +398,13 @@ def add_audio_to_video(video_path, audio_path, output_path):
 
 
 def generate_video_from_frames(frames, output_path, fps=30, gray2rgb=False, audio_path=""):
-    """
-    Generates a video from a list of frames.
+    """Generates a video from a list of frames.
     
     Args:
         frames (list of numpy arrays): The frames to include in the video.
         output_path (str): The path to save the generated video.
         fps (int, optional): The frame rate of the output video. Defaults to 30.
+
     """
     frames = torch.from_numpy(np.asarray(frames))
     _, h, w, _ = frames.shape
@@ -419,18 +414,17 @@ def generate_video_from_frames(frames, output_path, fps=30, gray2rgb=False, audi
     if not os.path.exists(os.path.dirname(output_path)):
         os.makedirs(os.path.dirname(output_path))
     video_temp_path = output_path.replace(".mp4", "_temp.mp4")
-    
+
     # resize back to ensure input resolution
-    imageio.mimwrite(video_temp_path, frames, fps=fps, quality=7, 
+    imageio.mimwrite(video_temp_path, frames, fps=fps, quality=7,
                      codec='libx264', ffmpeg_params=["-vf", f"scale={w}:{h}"])
-    
+
     # add audio to video if audio path exists
     if audio_path != "" and os.path.exists(audio_path):
-        output_path = add_audio_to_video(video_temp_path, audio_path, output_path)    
+        output_path = add_audio_to_video(video_temp_path, audio_path, output_path)
         os.remove(video_temp_path)
         return output_path
-    else:
-        return video_temp_path
+    return video_temp_path
 
 # reset all states for a new input
 def restart():
@@ -463,7 +457,7 @@ def restart():
 def load_unload_models(selected):
     global model_loaded
     global model
-    global matanyone_model 
+    global matanyone_model
     if selected:
         if model_loaded:
             model.samcontroler.sam_controler.model.to(arg_device)
@@ -477,7 +471,6 @@ def load_unload_models(selected):
             }
             # os.path.join('.')
 
-            from mmgp import offload
 
             # sam_checkpoint = load_file_from_url(sam_checkpoint_url_dict[arg_sam_model_type], ".")
             sam_checkpoint = None
@@ -542,7 +535,7 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
     gr.Markdown("If you have some trouble creating the perfect mask, be aware of these tips:")
     gr.Markdown("- Using the Matanyone Settings you can also define Negative Point Prompts to remove parts of the current selection.")
     gr.Markdown("- Sometime it is very hard to fit everything you want in a single mask, it may be much easier to combine multiple independent sub Masks before producing the Matting : each sub Mask is created by selecting an  area of an image and by clicking the Add Mask button. Sub masks can then be enabled / disabled in the Matanyone settings.")
-    
+
     with gr.Column( visible=True):
         with gr.Row():
             with gr.Accordion("Video Tutorial (click to expand)", open=False, elem_classes="custom-bg"):
@@ -556,7 +549,7 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
                         gr.Video(value="preprocessing/matanyone/tutorial_multi_targets.mp4", elem_classes="video")
 
 
-        
+
 
         with gr.Tabs():
             with gr.TabItem("Video"):
@@ -638,12 +631,12 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
 
                     # input video
                     with gr.Row(equal_height=True):
-                        with gr.Column(scale=2): 
+                        with gr.Column(scale=2):
                             gr.Markdown("## Step1: Upload video")
-                        with gr.Column(scale=2): 
+                        with gr.Column(scale=2):
                             step2_title = gr.Markdown("## Step2: Add masks <small>(Several clicks then **`Add Mask`** <u>one by one</u>)</small>", visible=False)
                     with gr.Row(equal_height=True):
-                        with gr.Column(scale=2):      
+                        with gr.Column(scale=2):
                             video_input = gr.Video(label="Input Video", elem_classes="video")
                             extract_frames_button = gr.Button(value="Load Video", interactive=True, elem_classes="new_button")
                         with gr.Column(scale=2):
@@ -655,7 +648,7 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
                                 remove_mask_button = gr.Button(value="Remove Mask", interactive=True, visible=False,  min_width=100) # no use
                                 matting_button = gr.Button(value="Generate Video Matting", interactive=True, visible=False,  min_width=100)
                             with gr.Row():
-                                gr.Markdown("")            
+                                gr.Markdown("")
 
                     # output video
                     with gr.Column() as output_row: #equal_height=True
@@ -671,15 +664,15 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
                                 export_to_vace_video_14B_btn = gr.Button("Export to current Video Input Video For Inpainting", visible= False)
                             with gr.Row(visible= True):
                                 export_to_current_video_engine_btn = gr.Button("Export to current Video Input and Video Mask", visible= False)
-                    
+
                 export_to_vace_video_14B_btn.click( fn=teleport_to_vace_14B, inputs=[], outputs=[tabs, model_choice]).then(
                     fn=export_to_current_video_engine, inputs= [foreground_video_output, alpha_video_output], outputs= [video_prompt_video_guide_trigger, vace_video_input, vace_video_mask])
-                
-                export_to_current_video_engine_btn.click(  fn=export_to_current_video_engine, inputs= [foreground_video_output, alpha_video_output], outputs= [vace_video_input, vace_video_mask]).then( #video_prompt_video_guide_trigger, 
+
+                export_to_current_video_engine_btn.click(  fn=export_to_current_video_engine, inputs= [foreground_video_output, alpha_video_output], outputs= [vace_video_input, vace_video_mask]).then( #video_prompt_video_guide_trigger,
                     fn=teleport_to_video_tab, inputs= [], outputs= [tabs])
 
 
-                # first step: get the video information     
+                # first step: get the video information
                 extract_frames_button.click(
                     fn=get_frames_from_video,
                     inputs=[
@@ -688,16 +681,16 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
                     outputs=[video_state, video_info, template_frame,
                             image_selection_slider, end_selection_slider,  track_pause_number_slider, point_prompt, matting_type, clear_button_click, add_mask_button, matting_button, template_frame,
                             foreground_video_output, alpha_video_output, foreground_output_button, alpha_output_button, mask_dropdown, step2_title]
-                )   
+                )
 
                 # second step: select images from slider
-                image_selection_slider.release(fn=select_video_template, 
-                                            inputs=[image_selection_slider, video_state, interactive_state], 
+                image_selection_slider.release(fn=select_video_template,
+                                            inputs=[image_selection_slider, video_state, interactive_state],
                                             outputs=[template_frame, video_state, interactive_state], api_name="select_image")
-                track_pause_number_slider.release(fn=get_end_number, 
-                                            inputs=[track_pause_number_slider, video_state, interactive_state], 
+                track_pause_number_slider.release(fn=get_end_number,
+                                            inputs=[track_pause_number_slider, video_state, interactive_state],
                                             outputs=[template_frame, interactive_state], api_name="end_image")
-                
+
                 # click select image to get mask using sam
                 template_frame.select(
                     fn=sam_refine,
@@ -734,42 +727,42 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
                     inputs=[video_state, interactive_state, mask_dropdown],
                     outputs=[template_frame]
                 )
-                
+
                 # clear input
                 video_input.change(
                     fn=restart,
                     inputs=[],
-                    outputs=[ 
+                    outputs=[
                         video_state,
                         interactive_state,
                         click_state,
                         foreground_video_output, alpha_video_output,
                         template_frame,
-                        image_selection_slider, end_selection_slider, track_pause_number_slider,point_prompt, export_to_vace_video_14B_btn, export_to_current_video_engine_btn, matting_type, clear_button_click, 
+                        image_selection_slider, end_selection_slider, track_pause_number_slider,point_prompt, export_to_vace_video_14B_btn, export_to_current_video_engine_btn, matting_type, clear_button_click,
                         add_mask_button, matting_button, template_frame, foreground_video_output, alpha_video_output, remove_mask_button, foreground_output_button, alpha_output_button, mask_dropdown, video_info, step2_title
                     ],
                     queue=False,
                     show_progress=False)
-                
+
                 video_input.clear(
                     fn=restart,
                     inputs=[],
-                    outputs=[ 
+                    outputs=[
                         video_state,
                         interactive_state,
                         click_state,
                         foreground_video_output, alpha_video_output,
                         template_frame,
-                        image_selection_slider , end_selection_slider, track_pause_number_slider,point_prompt, export_to_vace_video_14B_btn, export_to_current_video_engine_btn, matting_type, clear_button_click, 
+                        image_selection_slider , end_selection_slider, track_pause_number_slider,point_prompt, export_to_vace_video_14B_btn, export_to_current_video_engine_btn, matting_type, clear_button_click,
                         add_mask_button, matting_button, template_frame, foreground_video_output, alpha_video_output, remove_mask_button, foreground_output_button, alpha_output_button, mask_dropdown, video_info, step2_title
                     ],
                     queue=False,
                     show_progress=False)
-                
+
                 # points clear
                 clear_button_click.click(
                     fn = clear_click,
-                    inputs = [video_state, click_state,],
+                    inputs = [video_state, click_state],
                     outputs = [template_frame,click_state],
                 )
 
@@ -823,7 +816,7 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
                                                         value=10,
                                                         info="Dilation on the added mask",
                                                         interactive=True)
-                                
+
                             with gr.Row():
                                 image_selection_slider = gr.Slider(minimum=1, maximum=100, step=1, value=1, label="Num of Refinement Iterations", info="More iterations → More details & More time", visible=False)
                                 track_pause_number_slider = gr.Slider(minimum=1, maximum=100, step=1, value=1, label="Track end frame", visible=False)
@@ -838,17 +831,17 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
                                     min_width=100,
                                     scale=1)
                                 mask_dropdown = gr.Dropdown(multiselect=True, value=[], label="Mask Selection", info="Choose 1~all mask(s) added in Step 2", visible=False)
-                
+
 
                 with gr.Column():
                     # input image
                     with gr.Row(equal_height=True):
-                        with gr.Column(scale=2): 
+                        with gr.Column(scale=2):
                             gr.Markdown("## Step1: Upload image")
-                        with gr.Column(scale=2): 
+                        with gr.Column(scale=2):
                             step2_title = gr.Markdown("## Step2: Add masks <small>(Several clicks then **`Add Mask`** <u>one by one</u>)</small>", visible=False)
                     with gr.Row(equal_height=True):
-                        with gr.Column(scale=2):      
+                        with gr.Column(scale=2):
                             image_input = gr.Image(label="Input Image", elem_classes="image")
                             extract_frames_button = gr.Button(value="Load Image", interactive=True, elem_classes="new_button")
                         with gr.Column(scale=2):
@@ -870,10 +863,10 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
                         alpha_image_output = gr.Image(type="pil", label="Alpha Output", visible=False, elem_classes="image")
                         alpha_output_button = gr.Button(value="Alpha Mask Output", visible=False, elem_classes="new_button")
 
-                export_image_btn.click(  fn=export_image, inputs= [vace_image_refs, foreground_image_output], outputs= [vace_image_refs]).then( #video_prompt_video_guide_trigger, 
+                export_image_btn.click(  fn=export_image, inputs= [vace_image_refs, foreground_image_output], outputs= [vace_image_refs]).then( #video_prompt_video_guide_trigger,
                     fn=teleport_to_video_tab, inputs= [], outputs= [tabs])
 
-                # first step: get the image information 
+                # first step: get the image information
                 extract_frames_button.click(
                     fn=get_frames_from_image,
                     inputs=[
@@ -882,16 +875,16 @@ def display(tabs, model_choice, vace_video_input, vace_video_mask, vace_image_re
                     outputs=[image_state, image_info, template_frame,
                             image_selection_slider, track_pause_number_slider,point_prompt, clear_button_click, add_mask_button, matting_button, template_frame,
                             foreground_image_output, alpha_image_output, export_image_btn, alpha_output_button, mask_dropdown, step2_title]
-                )   
+                )
 
                 # second step: select images from slider
-                image_selection_slider.release(fn=select_image_template, 
-                                            inputs=[image_selection_slider, image_state, interactive_state], 
+                image_selection_slider.release(fn=select_image_template,
+                                            inputs=[image_selection_slider, image_state, interactive_state],
                                             outputs=[template_frame, image_state, interactive_state], api_name="select_image")
-                track_pause_number_slider.release(fn=get_end_number, 
-                                            inputs=[track_pause_number_slider, image_state, interactive_state], 
+                track_pause_number_slider.release(fn=get_end_number,
+                                            inputs=[track_pause_number_slider, image_state, interactive_state],
                                             outputs=[template_frame, interactive_state], api_name="end_image")
-                
+
                 # click select image to get mask using sam
                 template_frame.select(
                     fn=sam_refine,

@@ -8,18 +8,19 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import torch
 from diffusers.configuration_utils import ConfigMixin, register_to_config
-from diffusers.schedulers.scheduling_utils import (KarrasDiffusionSchedulers,
-                                                   SchedulerMixin,
-                                                   SchedulerOutput)
+from diffusers.schedulers.scheduling_utils import (
+    KarrasDiffusionSchedulers,
+    SchedulerMixin,
+    SchedulerOutput,
+)
 from diffusers.utils import deprecate, is_scipy_available
 
 if is_scipy_available():
-    import scipy.stats
+    pass
 
 
 class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
-    """
-    `UniPCMultistepScheduler` is a training-free framework designed for the fast sampling of diffusion models.
+    """`UniPCMultistepScheduler` is a training-free framework designed for the fast sampling of diffusion models.
 
     This model inherits from [`SchedulerMixin`] and [`ConfigMixin`]. Check the superclass documentation for the generic
     methods the library implements for all schedulers such as loading and saving.
@@ -68,6 +69,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         final_sigmas_type (`str`, defaults to `"zero"`):
             The final `sigma` value for the noise schedule during the sampling process. If `"sigma_min"`, the final
             sigma is the same as the last sigma in the training schedule. If `zero`, the final sigma is set to 0.
+
     """
 
     _compatibles = [e.name for e in KarrasDiffusionSchedulers]
@@ -133,26 +135,24 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     @property
     def step_index(self):
-        """
-        The index counter for current timestep. It will increase 1 after each scheduler step.
+        """The index counter for current timestep. It will increase 1 after each scheduler step.
         """
         return self._step_index
 
     @property
     def begin_index(self):
-        """
-        The index for the first timestep. It should be set from pipeline with `set_begin_index` method.
+        """The index for the first timestep. It should be set from pipeline with `set_begin_index` method.
         """
         return self._begin_index
 
     # Copied from diffusers.schedulers.scheduling_dpmsolver_multistep.DPMSolverMultistepScheduler.set_begin_index
     def set_begin_index(self, begin_index: int = 0):
-        """
-        Sets the begin index for the scheduler. This function should be run from pipeline before the inference.
+        """Sets the begin index for the scheduler. This function should be run from pipeline before the inference.
 
         Args:
             begin_index (`int`):
                 The begin index for the scheduler.
+
         """
         self._begin_index = begin_index
 
@@ -165,15 +165,15 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         mu: Optional[Union[float, None]] = None,
         shift: Optional[Union[float, None]] = None,
     ):
-        """
-        Sets the discrete timesteps used for the diffusion chain (to be run before inference).
+        """Sets the discrete timesteps used for the diffusion chain (to be run before inference).
+
         Args:
             num_inference_steps (`int`):
                 Total number of the spacing of the time steps.
             device (`str` or `torch.device`, *optional*):
                 The device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
-        """
 
+        """
         if self.config.use_dynamic_shifting and mu is None:
             raise ValueError(
                 " you have to pass a value for `mu` when `use_dynamic_shifting` is set to be `True`"
@@ -228,8 +228,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     # Copied from diffusers.schedulers.scheduling_ddpm.DDPMScheduler._threshold_sample
     def _threshold_sample(self, sample: torch.Tensor) -> torch.Tensor:
-        """
-        "Dynamic thresholding: At each sampling step we set s to a certain percentile absolute pixel value in xt0 (the
+        """"Dynamic thresholding: At each sampling step we set s to a certain percentile absolute pixel value in xt0 (the
         prediction of x_0 at timestep t), and if s > 1, then we threshold xt0 to the range [-s, s] and then divide by
         s. Dynamic thresholding pushes saturated pixels (those near -1 and 1) inwards, thereby actively preventing
         pixels from saturation at each step. We find that dynamic thresholding results in significantly better
@@ -283,8 +282,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         sample: torch.Tensor = None,
         **kwargs,
     ) -> torch.Tensor:
-        r"""
-        Convert the model output to the corresponding type the UniPC algorithm needs.
+        r"""Convert the model output to the corresponding type the UniPC algorithm needs.
 
         Args:
             model_output (`torch.Tensor`):
@@ -297,6 +295,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         Returns:
             `torch.Tensor`:
                 The converted model output.
+
         """
         timestep = args[0] if len(args) > 0 else kwargs.pop("timestep", None)
         if sample is None:
@@ -329,23 +328,22 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
                 x0_pred = self._threshold_sample(x0_pred)
 
             return x0_pred
+        if self.config.prediction_type == "flow_prediction":
+            sigma_t = self.sigmas[self.step_index]
+            epsilon = sample - (1 - sigma_t) * model_output
         else:
-            if self.config.prediction_type == "flow_prediction":
-                sigma_t = self.sigmas[self.step_index]
-                epsilon = sample - (1 - sigma_t) * model_output
-            else:
-                raise ValueError(
-                    f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, `sample`,"
-                    " `v_prediction` or `flow_prediction` for the UniPCMultistepScheduler."
-                )
+            raise ValueError(
+                f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, `sample`,"
+                " `v_prediction` or `flow_prediction` for the UniPCMultistepScheduler."
+            )
 
-            if self.config.thresholding:
-                sigma_t = self.sigmas[self.step_index]
-                x0_pred = sample - sigma_t * model_output
-                x0_pred = self._threshold_sample(x0_pred)
-                epsilon = model_output + x0_pred
+        if self.config.thresholding:
+            sigma_t = self.sigmas[self.step_index]
+            x0_pred = sample - sigma_t * model_output
+            x0_pred = self._threshold_sample(x0_pred)
+            epsilon = model_output + x0_pred
 
-            return epsilon
+        return epsilon
 
     def multistep_uni_p_bh_update(
         self,
@@ -355,8 +353,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         order: int = None,  # pyright: ignore
         **kwargs,
     ) -> torch.Tensor:
-        """
-        One step for the UniP (B(h) version). Alternatively, `self.solver_p` is used if is specified.
+        """One step for the UniP (B(h) version). Alternatively, `self.solver_p` is used if is specified.
 
         Args:
             model_output (`torch.Tensor`):
@@ -371,6 +368,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         Returns:
             `torch.Tensor`:
                 The sample tensor at the previous timestep.
+
         """
         prev_timestep = args[0] if len(args) > 0 else kwargs.pop(
             "prev_timestep", None)
@@ -441,7 +439,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         elif self.config.solver_type == "bh2":
             B_h = torch.expm1(hh)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError
 
         for i in range(1, order + 1):
             R.append(torch.pow(rks, i - 1))
@@ -492,8 +490,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         order: int = None,  # pyright: ignore
         **kwargs,
     ) -> torch.Tensor:
-        """
-        One step for the UniC (B(h) version).
+        """One step for the UniC (B(h) version).
 
         Args:
             this_model_output (`torch.Tensor`):
@@ -510,6 +507,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         Returns:
             `torch.Tensor`:
                 The corrected sample tensor at the current timestep.
+
         """
         this_timestep = args[0] if len(args) > 0 else kwargs.pop(
             "this_timestep", None)
@@ -584,7 +582,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         elif self.config.solver_type == "bh2":
             B_h = torch.expm1(hh)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError
 
         for i in range(1, order + 1):
             R.append(torch.pow(rks, i - 1))
@@ -641,10 +639,8 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     # Copied from diffusers.schedulers.scheduling_dpmsolver_multistep.DPMSolverMultistepScheduler._init_step_index
     def _init_step_index(self, timestep):
+        """Initialize the step_index counter for the scheduler.
         """
-        Initialize the step_index counter for the scheduler.
-        """
-
         if self.begin_index is None:
             if isinstance(timestep, torch.Tensor):
                 timestep = timestep.to(self.timesteps.device)
@@ -658,8 +654,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
              sample: torch.Tensor,
              return_dict: bool = True,
              generator=None) -> Union[SchedulerOutput, Tuple]:
-        """
-        Predict the sample from the previous timestep by reversing the SDE. This function propagates the sample with
+        """Predict the sample from the previous timestep by reversing the SDE. This function propagates the sample with
         the multistep UniPC.
 
         Args:
@@ -740,8 +735,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     def scale_model_input(self, sample: torch.Tensor, *args,
                           **kwargs) -> torch.Tensor:
-        """
-        Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
+        """Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
         current timestep.
 
         Args:
@@ -751,6 +745,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         Returns:
             `torch.Tensor`:
                 A scaled input sample.
+
         """
         return sample
 

@@ -9,7 +9,7 @@ def append_dims(x: torch.Tensor, target_dims: int) -> torch.Tensor:
         raise ValueError(
             f"input has {x.ndim} dims but target_dims is {target_dims}, which is less"
         )
-    elif dims_to_append == 0:
+    if dims_to_append == 0:
         return x
     return x[(...,) + (None,) * dims_to_append]
 

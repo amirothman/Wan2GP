@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Alibaba, Inc. and its affiliates.
 """Utils for monoDepth."""
 import re
@@ -17,6 +16,7 @@ def read_pfm(path):
 
     Returns:
         tuple: (data, scale)
+
     """
     with open(path, 'rb') as file:
 
@@ -66,8 +66,8 @@ def write_pfm(path, image, scale=1):
         path (str): pathto file
         image (array): data
         scale (int, optional): Scale. Defaults to 1.
-    """
 
+    """
     with open(path, 'wb') as file:
         color = None
 
@@ -79,21 +79,21 @@ def write_pfm(path, image, scale=1):
         if len(image.shape) == 3 and image.shape[2] == 3:  # color image
             color = True
         elif (len(image.shape) == 2
-              or len(image.shape) == 3 and image.shape[2] == 1):  # greyscale
+              or (len(image.shape) == 3 and image.shape[2] == 1)):  # greyscale
             color = False
         else:
             raise Exception(
                 'Image must have H x W x 3, H x W x 1 or H x W dimensions.')
 
-        file.write('PF\n' if color else 'Pf\n'.encode())
-        file.write('%d %d\n'.encode() % (image.shape[1], image.shape[0]))
+        file.write('PF\n' if color else b'Pf\n')
+        file.write(b'%d %d\n' % (image.shape[1], image.shape[0]))
 
         endian = image.dtype.byteorder
 
-        if endian == '<' or endian == '=' and sys.byteorder == 'little':
+        if endian == '<' or (endian == '=' and sys.byteorder == 'little'):
             scale = -scale
 
-        file.write('%f\n'.encode() % scale)
+        file.write(b'%f\n' % scale)
 
         image.tofile(file)
 
@@ -106,6 +106,7 @@ def read_image(path):
 
     Returns:
         array: RGB image (0-1)
+
     """
     img = cv2.imread(path)
 
@@ -125,6 +126,7 @@ def resize_image(img):
 
     Returns:
         tensor: data ready for network
+
     """
     height_orig = img.shape[0]
     width_orig = img.shape[1]
@@ -157,6 +159,7 @@ def resize_depth(depth, width, height):
 
     Returns:
         array: processed depth
+
     """
     depth = torch.squeeze(depth[0, :, :, :]).to('cpu')
 
@@ -172,6 +175,7 @@ def write_depth(path, depth, bits=1):
     Args:
         path (str): filepath without extension
         depth (array): depth
+
     """
     write_pfm(path + '.pfm', depth.astype(np.float32))
 
@@ -190,4 +194,3 @@ def write_depth(path, depth, bits=1):
     elif bits == 2:
         cv2.imwrite(path + '.png', out.astype('uint16'))
 
-    return

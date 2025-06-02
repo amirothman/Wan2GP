@@ -1,43 +1,38 @@
-from mmgp import offload
-import argparse
 import os
 import random
-from datetime import datetime
-from pathlib import Path
-from diffusers.utils import logging
-from typing import Optional, List, Union
-import yaml
-from wan.utils.utils import calculate_new_dimensions
+from typing import List, Optional, Union
+
+import cv2
 import imageio
-import json
 import numpy as np
 import torch
-from safetensors import safe_open
+import yaml
+from diffusers.utils import logging
+from mmgp import offload
 from PIL import Image
 from transformers import (
-    T5EncoderModel,
-    T5Tokenizer,
     AutoModelForCausalLM,
     AutoProcessor,
     AutoTokenizer,
+    T5Tokenizer,
 )
-from huggingface_hub import hf_hub_download
+
+from wan.utils.utils import calculate_new_dimensions
 
 from .models.autoencoders.causal_video_autoencoder import (
     CausalVideoAutoencoder,
 )
+from .models.autoencoders.latent_upsampler import LatentUpsampler
 from .models.transformers.symmetric_patchifier import SymmetricPatchifier
 from .models.transformers.transformer3d import Transformer3DModel
+from .pipelines import crf_compressor
 from .pipelines.pipeline_ltx_video import (
     ConditioningItem,
-    LTXVideoPipeline,
     LTXMultiScalePipeline,
+    LTXVideoPipeline,
 )
 from .schedulers.rf import RectifiedFlowScheduler
 from .utils.skip_layer_strategy import SkipLayerStrategy
-from .models.autoencoders.latent_upsampler import LatentUpsampler
-from .pipelines import crf_compressor
-import cv2
 
 MAX_HEIGHT = 720
 MAX_WIDTH = 1280
@@ -56,7 +51,7 @@ def get_total_gpu_memory():
 def get_device():
     if torch.cuda.is_available():
         return "cuda"
-    elif torch.backends.mps.is_available():
+    if torch.backends.mps.is_available():
         return "mps"
     return "cpu"
 
@@ -74,6 +69,7 @@ def load_image_to_tensor_with_resize_and_crop(
         target_height: Desired height of output tensor
         target_width: Desired width of output tensor
         just_crop: If True, only crop the image to the target size without resizing
+
     """
     if isinstance(image_input, str):
         image = Image.open(image_input).convert("RGB")
@@ -150,7 +146,7 @@ class LTXV:
         model_filepath: str,
         text_encoder_filepath: str,
         dtype = torch.bfloat16,
-        VAE_dtype = torch.bfloat16, 
+        VAE_dtype = torch.bfloat16,
         mixed_precision_transformer = False
     ):
 
@@ -158,7 +154,7 @@ class LTXV:
         dtype  = torch.bfloat16
         self.mixed_precision_transformer = mixed_precision_transformer
         self.distilled = any("lora" in name for name in model_filepath)
-        model_filepath = [name for name in model_filepath if not "lora" in name ]
+        model_filepath = [name for name in model_filepath if "lora" not in name ]
         # with safe_open(ckpt_path, framework="pt") as f:
         #     metadata = f.metadata()
         #     config_str = metadata.get("config")
@@ -178,10 +174,10 @@ class LTXV:
         # offload.save_model(vae, "vae.safetensors", config_file_path="config_vae.json")
 
         # model_filepath = "c:/temp/ltxd/ltxv-13b-0.9.7-distilled.safetensors"
-        transformer = offload.fast_load_transformers_model(model_filepath, modelClass=Transformer3DModel) 
+        transformer = offload.fast_load_transformers_model(model_filepath, modelClass=Transformer3DModel)
         # offload.save_model(transformer, "ckpts/ltxv_0.9.7_13B_distilled_bf16.safetensors", config_file_path= "c:/temp/ltxd/config.json")
         # offload.save_model(transformer, "ckpts/ltxv_0.9.7_13B_distilled_quanto_bf16_int8.safetensors", do_quantize= True, config_file_path="c:/temp/ltxd/config.json")
-        # transformer = offload.fast_load_transformers_model(model_filepath, modelClass=Transformer3DModel) 
+        # transformer = offload.fast_load_transformers_model(model_filepath, modelClass=Transformer3DModel)
         transformer._model_dtype = dtype
         if mixed_precision_transformer:
             transformer._lock_dtype = torch.float
@@ -223,7 +219,7 @@ class LTXV:
         if prompt_enhancer_image_caption_model != None:
             pipe["prompt_enhancer_image_caption_model"] = prompt_enhancer_image_caption_model
             prompt_enhancer_image_caption_model._model_dtype = torch.float
-        
+
             pipe["prompt_enhancer_llm_model"] = prompt_enhancer_llm_model
 
         # offload.profile(pipe, profile_no=5, extraModelsToQuantize = None, quantizeTransformer = False, budgets = { "prompt_enhancer_llm_model" : 10000, "prompt_enhancer_image_caption_model" : 10000, "vae" : 3000, "*" : 100 }, verboseLevel=2)
@@ -247,7 +243,7 @@ class LTXV:
         pipeline = LTXMultiScalePipeline(pipeline, latent_upsampler=latent_upsampler)
 
         self.pipeline = pipeline
-        self.model = transformer 
+        self.model = transformer
         self.vae = vae
         # return pipeline, pipe
 
@@ -282,7 +278,7 @@ class LTXV:
 
 
         if input_video != None:
-            conditioning_media_paths.append(input_video) 
+            conditioning_media_paths.append(input_video)
             conditioning_start_frames.append(0)
             height, width = input_video.shape[-2:]
         else:
@@ -290,11 +286,11 @@ class LTXV:
                 image_start = image_start[0]
                 frame_width, frame_height  = image_start.size
                 height, width = calculate_new_dimensions(height, width, frame_height, frame_width, fit_into_canvas, 32)
-                conditioning_media_paths.append(image_start) 
+                conditioning_media_paths.append(image_start)
                 conditioning_start_frames.append(0)
             if image_end != None:
                 image_end = image_end[0]
-                conditioning_media_paths.append(image_end) 
+                conditioning_media_paths.append(image_end)
                 conditioning_start_frames.append(frame_num-1)
 
         if len(conditioning_media_paths) == 0:
@@ -308,7 +304,7 @@ class LTXV:
         # check if pipeline_config is a file
         if not os.path.isfile(pipeline_config):
             raise ValueError(f"Pipeline config file {pipeline_config} does not exist")
-        with open(pipeline_config, "r") as f:
+        with open(pipeline_config) as f:
             pipeline_config = yaml.safe_load(f)
 
 
@@ -483,6 +479,7 @@ def prepare_conditioning(
 
     Returns:
         A list of ConditioningItem objects.
+
     """
     conditioning_items = []
     for path, strength, start_frame in zip(
@@ -493,7 +490,7 @@ def prepare_conditioning(
         else:
             num_input_frames = orig_num_input_frames = get_media_num_frames(path)
         if hasattr(pipeline, "trim_conditioning_sequence") and callable(
-            getattr(pipeline, "trim_conditioning_sequence")
+            pipeline.trim_conditioning_sequence
         ):
             num_input_frames = pipeline.trim_conditioning_sequence(
                 start_frame, orig_num_input_frames, num_frames
@@ -518,13 +515,12 @@ def prepare_conditioning(
 def get_media_num_frames(media_path: str) -> int:
     if isinstance(media_path, Image.Image):
         return 1
-    elif torch.is_tensor(media_path):
+    if torch.is_tensor(media_path):
         return media_path.shape[1]
-    elif isinstance(media_path, str) and any( media_path.lower().endswith(ext) for ext in [".mp4", ".avi", ".mov", ".mkv"]):
+    if isinstance(media_path, str) and any( media_path.lower().endswith(ext) for ext in [".mp4", ".avi", ".mov", ".mkv"]):
         reader = imageio.get_reader(media_path)
         return min(reader.count_frames(), max_frames)
-    else:
-        raise Exception("video format not supported")
+    raise Exception("video format not supported")
 
 
 def load_media_file(

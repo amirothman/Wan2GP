@@ -2,15 +2,14 @@
 
 import time
 import traceback
-
-from threading import Thread, Lock
+from threading import Lock, Thread
 
 
 class Listener:
     task_queue = []
     lock = Lock()
     thread = None
-    
+
     @classmethod
     def _process_tasks(cls):
         while True:
@@ -18,20 +17,20 @@ class Listener:
             with cls.lock:
                 if cls.task_queue:
                     task = cls.task_queue.pop(0)
-                    
+
             if task is None:
                 time.sleep(0.001)
                 continue
-                
+
             func, args, kwargs = task
             try:
                 func(*args, **kwargs)
-            except Exception as e:
-                tb = traceback.format_exc().split('\n')[:-1] 
+            except Exception:
+                tb = traceback.format_exc().split('\n')[:-1]
                 print('\n'.join(tb))
 
                 # print(f"Error in listener thread: {e}")
-    
+
     @classmethod
     def add_task(cls, func, *args, **kwargs):
         with cls.lock:

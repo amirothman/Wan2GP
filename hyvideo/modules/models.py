@@ -1,24 +1,27 @@
-from typing import Any, List, Tuple, Optional, Union, Dict
-from einops import rearrange
+from typing import Dict, List, Optional, Tuple, Union
 
+import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-from diffusers.models import ModelMixin
 from diffusers.configuration_utils import ConfigMixin, register_to_config
+from diffusers.models import ModelMixin
+from einops import rearrange
+from torch import nn
+
+from wan.modules.attention import pay_attention
 
 from .activation_layers import get_activation_layer
+from .embed_layers import PatchEmbed, TextProjection, TimestepEmbedder
+from .mlp_layers import MLP, FinalLayer, MLPEmbedder
+from .modulate_layers import (
+    ModulateDiT,
+    apply_gate_and_accumulate_,
+    modulate,
+    modulate_,
+)
 from .norm_layers import get_norm_layer
-from .embed_layers import TimestepEmbedder, PatchEmbed, TextProjection
-from .attenion import attention, parallel_attention, get_cu_seqlens
 from .posemb_layers import apply_rotary_emb
-from .mlp_layers import MLP, MLPEmbedder, FinalLayer
-from .modulate_layers import ModulateDiT, modulate, modulate_ , apply_gate, apply_gate_and_accumulate_
 from .token_refiner import SingleTokenRefiner
-import numpy as np
-from mmgp import offload
-from wan.modules.attention import pay_attention
+
 
 def get_linear_split_map():
     hidden_size = 3072
@@ -34,8 +37,7 @@ except ImportError:
 
 
 class MMDoubleStreamBlock(nn.Module):
-    """
-    A multimodal dit block with seperate modulation for
+    """A multimodal dit block with seperate modulation for
     text and image/video, see more details (SD3): https://arxiv.org/abs/2403.03206
                                      (Flux.1): https://github.com/black-forest-labs/flux
     """
@@ -51,8 +53,8 @@ class MMDoubleStreamBlock(nn.Module):
         qkv_bias: bool = False,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
-        attention_mode: str = "sdpa",        
-    ):  
+        attention_mode: str = "sdpa",
+    ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
 
@@ -151,15 +153,15 @@ class MMDoubleStreamBlock(nn.Module):
         img: torch.Tensor,
         txt: torch.Tensor,
         vec: torch.Tensor,
-        attn_mask = None,  
+        attn_mask = None,
         seqlens_q: Optional[torch.Tensor] = None,
         seqlens_kv: Optional[torch.Tensor] = None,
         freqs_cis: tuple = None,
         condition_type: str = None,
         token_replace_vec: torch.Tensor = None,
-        frist_frame_token_num: int = None,        
+        frist_frame_token_num: int = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        
+
         if condition_type == "token_replace":
             img_mod1, token_replace_img_mod1 = self.img_mod(vec, condition_type=condition_type, \
                                                             token_replace_vec=token_replace_vec)
@@ -195,7 +197,7 @@ class MMDoubleStreamBlock(nn.Module):
 
         ##### Enjoy this spagheti VRAM optimizations done by DeepBeepMeep !
         # I am sure you are a nice person and as you copy this code, you will give me officially proper credits:
-        # Please link to https://github.com/deepbeepmeep/HunyuanVideoGP and @deepbeepmeep on twitter  
+        # Please link to https://github.com/deepbeepmeep/HunyuanVideoGP and @deepbeepmeep on twitter
 
         # Prepare image for attention.
         img_modulated = self.img_norm1(img)
@@ -209,7 +211,7 @@ class MMDoubleStreamBlock(nn.Module):
 
         shape = (*img_modulated.shape[:2], self.heads_num, int(img_modulated.shape[-1] / self.heads_num) )
         img_q = self.img_attn_q(img_modulated).view(*shape)
-        img_k = self.img_attn_k(img_modulated).view(*shape)        
+        img_k = self.img_attn_k(img_modulated).view(*shape)
         img_v = self.img_attn_v(img_modulated).view(*shape)
         del img_modulated
 
@@ -217,7 +219,7 @@ class MMDoubleStreamBlock(nn.Module):
         self.img_attn_q_norm.apply_(img_q).to(img_v)
         img_q_len = img_q.shape[1]
         self.img_attn_k_norm.apply_(img_k).to(img_v)
-        img_kv_len= img_k.shape[1]        
+        img_kv_len= img_k.shape[1]
         batch_size = img_k.shape[0]
         # Apply RoPE if needed.
         qklist = [img_q, img_k]
@@ -240,23 +242,23 @@ class MMDoubleStreamBlock(nn.Module):
         # Run actual attention.
         q = torch.cat((img_q, txt_q), dim=1)
         del img_q, txt_q
-        k = torch.cat((img_k, txt_k), dim=1)        
+        k = torch.cat((img_k, txt_k), dim=1)
         del img_k, txt_k
         v = torch.cat((img_v, txt_v), dim=1)
         del img_v, txt_v
-        
+
         # attention computation start
         qkv_list = [q,k,v]
         del q, k, v
 
         attn = pay_attention(
             qkv_list,
-            attention_mask=attn_mask,                
+            attention_mask=attn_mask,
             q_lens=seqlens_q,
             k_lens=seqlens_kv,
         )
         b, s, a, d = attn.shape
-        attn = attn.reshape(b, s, -1)        
+        attn = attn.reshape(b, s, -1)
         del qkv_list
 
         # attention computation end
@@ -274,7 +276,7 @@ class MMDoubleStreamBlock(nn.Module):
             img_modulated = img_modulated.to(torch.bfloat16)
             modulate_( img_modulated[:, :frist_frame_token_num], shift=tr_img_mod2_shift, scale=tr_img_mod2_scale)
             modulate_( img_modulated[:, frist_frame_token_num:], shift=img_mod2_shift, scale=img_mod2_scale)
-            self.img_mlp.apply_(img_modulated)        
+            self.img_mlp.apply_(img_modulated)
             apply_gate_and_accumulate_(img[:, :frist_frame_token_num], img_modulated[:, :frist_frame_token_num], gate=tr_img_mod2_gate)
             apply_gate_and_accumulate_(img[:, frist_frame_token_num:], img_modulated[:, frist_frame_token_num:], gate=img_mod2_gate)
             del img_modulated
@@ -285,7 +287,7 @@ class MMDoubleStreamBlock(nn.Module):
             img_modulated = self.img_norm2(img)
             img_modulated = img_modulated.to(torch.bfloat16)
             modulate_( img_modulated , shift=img_mod2_shift, scale=img_mod2_scale)
-            self.img_mlp.apply_(img_modulated)        
+            self.img_mlp.apply_(img_modulated)
             apply_gate_and_accumulate_(img, img_modulated, gate=img_mod2_gate)
             del img_modulated
 
@@ -297,14 +299,13 @@ class MMDoubleStreamBlock(nn.Module):
         txt_modulated = txt_modulated.to(torch.bfloat16)
         modulate_(txt_modulated, shift=txt_mod2_shift, scale=txt_mod2_scale)
         txt_mlp = self.txt_mlp(txt_modulated)
-        del txt_modulated 
+        del txt_modulated
         apply_gate_and_accumulate_(txt, txt_mlp, gate=txt_mod2_gate)
         return img, txt
 
 
 class MMSingleStreamBlock(nn.Module):
-    """
-    A DiT block with parallel linear layers as described in
+    """A DiT block with parallel linear layers as described in
     https://arxiv.org/abs/2302.05442 and adapted modulation interface.
     Also refer to (SD3): https://arxiv.org/abs/2403.03206
                   (Flux.1): https://github.com/black-forest-labs/flux
@@ -387,12 +388,12 @@ class MMSingleStreamBlock(nn.Module):
         freqs_cis: Tuple[torch.Tensor, torch.Tensor] = None,
         condition_type: str = None,
         token_replace_vec: torch.Tensor = None,
-        frist_frame_token_num: int = None,        
+        frist_frame_token_num: int = None,
     ) -> torch.Tensor:
 
         ##### More spagheti VRAM optimizations done by DeepBeepMeep !
         # I am sure you are a nice person and as you copy this code, you will give me proper credits:
-        # Please link to https://github.com/deepbeepmeep/HunyuanVideoGP and @deepbeepmeep on twitter  
+        # Please link to https://github.com/deepbeepmeep/HunyuanVideoGP and @deepbeepmeep on twitter
 
         if condition_type == "token_replace":
             mod, tr_mod = self.modulation(vec,
@@ -428,7 +429,7 @@ class MMSingleStreamBlock(nn.Module):
         txt_k = self.linear1_attn_k(txt_mod).view(*shape)
         txt_v = self.linear1_attn_v(txt_mod).view(*shape)
 
-        batch_size = img_mod.shape[0]        
+        batch_size = img_mod.shape[0]
 
         # Apply QK-Norm if needed.
         # q = self.q_norm(q).to(v)
@@ -446,7 +447,7 @@ class MMSingleStreamBlock(nn.Module):
         k = torch.cat((img_k, txt_k), dim=1)
         img_kv_len=img_k.shape[1]
         del img_k, txt_k
-        
+
         v = torch.cat((img_v, txt_v), dim=1)
         del img_v, txt_v
 
@@ -455,15 +456,15 @@ class MMSingleStreamBlock(nn.Module):
         del q, k, v
         attn = pay_attention(
             qkv_list,
-            attention_mask=attn_mask,                
+            attention_mask=attn_mask,
             q_lens = seqlens_q,
             k_lens = seqlens_kv,
         )
         b, s, a, d = attn.shape
-        attn = attn.reshape(b, s, -1)        
+        attn = attn.reshape(b, s, -1)
         del qkv_list
         # attention computation end
-      
+
         x_mod =  torch.cat((img_mod, txt_mod), 1)
         del img_mod, txt_mod
         x_mod_shape = x_mod.shape
@@ -476,7 +477,7 @@ class MMSingleStreamBlock(nn.Module):
             mlp_chunk = self.linear1_mlp(x_chunk)
             mlp_chunk = self.mlp_act(mlp_chunk)
             attn_mlp_chunk = torch.cat((attn_chunk, mlp_chunk), -1)
-            del attn_chunk, mlp_chunk 
+            del attn_chunk, mlp_chunk
             x_chunk[...] = self.linear2(attn_mlp_chunk)
             del attn_mlp_chunk
         x_mod = x_mod.view(x_mod_shape)
@@ -493,16 +494,16 @@ class MMSingleStreamBlock(nn.Module):
 
 class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
     def preprocess_loras(self, model_filename, sd):
-        if not "i2v" in model_filename:
+        if "i2v" not in model_filename:
             return sd
         new_sd = {}
         for k,v in sd.items():
-            repl_list = ["double_blocks", "single_blocks", "final_layer", "img_mlp", "img_attn_qkv", "img_attn_proj","img_mod", "txt_mlp", "txt_attn_qkv","txt_attn_proj", "txt_mod", "linear1", 
+            repl_list = ["double_blocks", "single_blocks", "final_layer", "img_mlp", "img_attn_qkv", "img_attn_proj","img_mod", "txt_mlp", "txt_attn_qkv","txt_attn_proj", "txt_mod", "linear1",
                         "linear2", "modulation",  "mlp_fc1"]
             src_list = [k +"_" for k in repl_list] +  ["_" + k for k in repl_list]
             tgt_list = [k +"." for k in repl_list] +  ["." + k for k in repl_list]
             if k.startswith("Hunyuan_video_I2V_lora_"):
-                # crappy conversion script for non reversible lora naming  
+                # crappy conversion script for non reversible lora naming
                 k = k.replace("Hunyuan_video_I2V_lora_","diffusion_model.")
                 k = k.replace("lora_up","lora_B")
                 k = k.replace("lora_down","lora_A")
@@ -512,10 +513,10 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                     k = k.replace(s,t)
                 if  "individual_token_refiner" in k:
                     k = k.replace("txt_in_individual_token_refiner_blocks_", "txt_in.individual_token_refiner.blocks.")
-                    k = k.replace("_mlp_fc", ".mlp.fc",)
-                    k = k.replace(".mlp_fc", ".mlp.fc",)
+                    k = k.replace("_mlp_fc", ".mlp.fc")
+                    k = k.replace(".mlp_fc", ".mlp.fc")
             new_sd[k] = v
-        return new_sd    
+        return new_sd
     """
     HunyuanVideo Transformer backbone
 
@@ -594,7 +595,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
 
-        # mm_double_blocks_depth , mm_single_blocks_depth = 5, 5 
+        # mm_double_blocks_depth , mm_single_blocks_depth = 5, 5
 
         self.patch_size = patch_size
         self.in_channels = in_channels
@@ -604,7 +605,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         self.rope_dim_list = rope_dim_list
         self.i2v_condition_type = i2v_condition_type
         self.attention_mode = attention_mode
-        
+
         # Text projection. Default to linear projection.
         # Alternative: TokenRefiner. See more details (LI-DiT): http://arxiv.org/abs/2406.11831
         self.use_attention_mask = use_attention_mask
@@ -713,7 +714,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
     def lock_layers_dtypes(self, dtype = torch.float32):
         layer_list = [self.final_layer, self.final_layer.linear, self.final_layer.adaLN_modulation[1]]
         target_dype= dtype
-        
+
         for current_layer_list, current_dtype in zip([layer_list], [target_dype]):
             for layer in current_layer_list:
                 layer._lock_dtype = dtype
@@ -741,7 +742,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         self,
         x: torch.Tensor,
         t: torch.Tensor,  # Should be in range(0, 1000).
-        ref_latents: torch.Tensor=None,        
+        ref_latents: torch.Tensor=None,
         text_states: torch.Tensor = None,
         text_mask: torch.Tensor = None,  # Now we don't use it.
         text_states_2: Optional[torch.Tensor] = None,  # Text embedding for modulation.
@@ -752,11 +753,11 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         x_id = 0,
         callback = None,
     ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
-    
+
         img = x
         batch_no, _, ot, oh, ow = x.shape
         del x
-        txt = text_states   
+        txt = text_states
         tt, th, tw = (
             ot // self.patch_size[0],
             oh // self.patch_size[1],
@@ -784,7 +785,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         if self.i2v_condition_type == "token_replace":
             token_replace_vec += vec_2
         del vec_2
-        
+
         # guidance modulation
         if self.guidance_embed:
             if guidance is None:
@@ -818,25 +819,25 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
 
         text_len = text_mask.sum(1)
         total_len = text_len + img_seq_len
-        seqlens_q = seqlens_kv = total_len 
+        seqlens_q = seqlens_kv = total_len
         attn_mask = None
 
         freqs_cis = (freqs_cos, freqs_sin) if freqs_cos is not None else None
-        
+
 
         if self.enable_teacache:
             if x_id == 0:
                 self.should_calc = True
-                inp = img[0:1] 
-                vec_ = vec 
-                ( img_mod1_shift, img_mod1_scale, _ , _ , _ , _ , ) = self.double_blocks[0].img_mod(vec_).chunk(6, dim=-1)
+                inp = img[0:1]
+                vec_ = vec
+                ( img_mod1_shift, img_mod1_scale, _ , _ , _ , _  ) = self.double_blocks[0].img_mod(vec_).chunk(6, dim=-1)
                 normed_inp = self.double_blocks[0].img_norm1(inp)
                 normed_inp = normed_inp.to(torch.bfloat16)
                 modulated_inp = modulate( normed_inp, shift=img_mod1_shift, scale=img_mod1_scale )
                 del normed_inp, img_mod1_shift, img_mod1_scale
                 if self.teacache_counter <= self.teacache_start_step or self.teacache_counter == self.num_steps-1:
                     self.accumulated_rel_l1_distance = 0
-                else: 
+                else:
                     coefficients = [7.33226126e+02, -4.01131952e+02,  6.75869174e+01, -3.14987800e+00, 9.61237896e-02]
                     rescale_func = np.poly1d(coefficients)
                     self.accumulated_rel_l1_distance += rescale_func(((modulated_inp-self.previous_modulated_input).abs().mean() / self.previous_modulated_input.abs().mean()).cpu().item())
@@ -845,7 +846,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                         self.teacache_skipped_steps += 1
                     else:
                         self.accumulated_rel_l1_distance = 0
-                self.previous_modulated_input = modulated_inp  
+                self.previous_modulated_input = modulated_inp
                 self.teacache_counter += 1
                 if self.teacache_counter == self.num_steps:
                     self.teacache_counter = 0
@@ -855,7 +856,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         if not self.should_calc:
             img += self.previous_residual[x_id]
         else:
-            if self.enable_teacache:            
+            if self.enable_teacache:
                 self.previous_residual[x_id] = None
                 ori_img = img[0:1].clone()
             # --------------------- Pass through DiT blocks ------------------------
@@ -869,13 +870,13 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                         img[i:i+1],
                         txt[i:i+1],
                         vec[i:i+1],
-                        attn_mask,                
+                        attn_mask,
                         seqlens_q[i:i+1],
                         seqlens_kv[i:i+1],
                         freqs_cis,
                         self.i2v_condition_type,
                         token_replace_vec,
-                        frist_frame_token_num,                    
+                        frist_frame_token_num,
                     ]
 
                     img[i], txt[i] = block(*double_block_args)
@@ -893,13 +894,13 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                         txt[i:i+1],
                         vec[i:i+1],
                         txt_seq_len,
-                        attn_mask,                
+                        attn_mask,
                         seqlens_q[i:i+1],
                         seqlens_kv[i:i+1],
                         (freqs_cos, freqs_sin),
                         self.i2v_condition_type,
                         token_replace_vec,
-                        frist_frame_token_num,                    
+                        frist_frame_token_num,
                     ]
 
                     img[i], txt[i] = block(*single_block_args)
@@ -911,24 +912,24 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                     self.previous_residual[0] = torch.empty_like(img)
                     for i, (x, residual) in enumerate(zip(img, self.previous_residual[0])):
                         if i < len(img) - 1:
-                            residual[...] = torch.sub(x, ori_img) 
+                            residual[...] = torch.sub(x, ori_img)
                         else:
                             residual[...] = ori_img
-                            torch.sub(x, ori_img, out=residual)                     
+                            torch.sub(x, ori_img, out=residual)
                     x = None
                 else:
                     self.previous_residual[x_id] = ori_img
-                    torch.sub(img, ori_img, out=self.previous_residual[x_id]) 
+                    torch.sub(img, ori_img, out=self.previous_residual[x_id])
 
 
         if ref_length != None:
             img = img[:, ref_length:]
         # ---------------------------- Final layer ------------------------------
         out_dtype = self.final_layer.linear.weight.dtype
-        vec = vec.to(out_dtype)        
+        vec = vec.to(out_dtype)
         img_list  = []
         for img_chunk, vec_chunk in zip(img,vec):
-             img_list.append( self.final_layer(img_chunk.to(out_dtype).unsqueeze(0), vec_chunk.unsqueeze(0))) # (N, T, patch_size ** 2 * out_channels) 
+             img_list.append( self.final_layer(img_chunk.to(out_dtype).unsqueeze(0), vec_chunk.unsqueeze(0))) # (N, T, patch_size ** 2 * out_channels)
         img = torch.cat(img_list)
         img_list = None
 
@@ -937,8 +938,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         return img
 
     def unpatchify(self, x, t, h, w):
-        """
-        x: (N, T, patch_size**2 * C)
+        """x: (N, T, patch_size**2 * C)
         imgs: (N, H, W, C)
         """
         c = self.unpatchify_channels
@@ -974,7 +974,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
             "total": sum(p.numel() for p in self.parameters()),
         }
         counts["attn+mlp"] = counts["double"] + counts["single"]
-        return counts       
+        return counts
 
 
 #################################################################################
@@ -1015,5 +1015,5 @@ HUNYUAN_VIDEO_CONFIG = {
         "heads_num": 24,
         "mlp_width_ratio": 4,
     },
-    
+
 }
