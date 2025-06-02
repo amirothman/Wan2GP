@@ -1,0 +1,22 @@
+you're ditching both the CLI and Gradio UI for now. You're aiming to use Wan2GP's models (e.g., ltxv) and just run them in a clean Python script — no fluff, no input prompts, no click-to-run, just direct calls.
+
+Here’s a stripped-down task plan to turn Wan2GP’s messy app into a simple script-based workflow:
+
+✅ Goal:
+Run something like:
+
+```bash
+python run_ltxv.py
+```
+And it generates a video using the ltxv model and saves it somewhere — maybe output/output.mp4.
+
+📋 TASK LIST: Run ltxv in a Minimal Script
+1. Set Up Script Layout
+2. Extract Core Logic
+4. Hardcode or Config Inputs
+    For now, just hardcode in the script:
+        Prompt
+        Output filename
+        Model weights path or HF model ID
+        Sampling params (seed, steps, etc.)
+5. Handle Model Weights
