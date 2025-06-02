@@ -260,3 +260,29 @@ User experienced "CUDA out of memory. Tried to allocate 128.00 MiB. GPU 0 has a 
 4. **Compatibility**: Should work with existing pipeline without code changes
 
 ---
+[2025-01-06 23:55:00] - LTXMultiScalePipeline .to() Method Error Fix
+
+## Decision
+
+Fixed "'LTXMultiScalePipeline' object has no attribute 'to'" error in run_ltxv.py
+
+## Rationale
+
+The error occurred because `LTXMultiScalePipeline` is not a PyTorch module and doesn't inherit from `torch.nn.Module`, so it doesn't have a `.to()` method. It's a wrapper class that contains a `video_pipeline` and `latent_upsampler`. The individual components (transformer, text_encoder, vae) were already being moved to the correct device earlier in the code.
+
+## Implementation Details
+
+- **Root Cause**: Attempting to call `.to(self.device)` on `LTXMultiScalePipeline` object at line 343
+- **Detection Method**: Error message clearly indicated missing `.to()` method on `LTXMultiScalePipeline`
+- **Solution**: Removed the problematic `.to()` call since components are already on correct device
+- **Code Change**: Replaced `pipeline = pipeline.to(self.device)` with informational comment
+- **Validation**: All model components (transformer, text_encoder, vae) already explicitly moved to device
+
+## Analysis Process
+
+1. **Error Analysis**: "'LTXMultiScalePipeline' object has no attribute 'to'" at run_ltxv.py:343
+2. **Class Investigation**: Examined LTXMultiScalePipeline class structure in pipeline_ltx_video.py:1736
+3. **Architecture Understanding**: LTXMultiScalePipeline is wrapper, not PyTorch module
+4. **Component Verification**: Confirmed individual components already on correct device
+
+---
