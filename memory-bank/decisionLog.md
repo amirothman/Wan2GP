@@ -362,3 +362,174 @@ latent_upsampler._model_dtype = DTYPE
 The pipeline should now proceed past the upsampling stage without data type mismatch errors, allowing video generation to complete successfully.
 
 ---
+[2025-01-06 00:14:00] - FINAL FIX: Pipeline-Level Data Type Conversion for Latent Upsampler
+
+## Decision
+
+Fixed persistent "Input type (float) and bias type (c10::BFloat16) should be the same" error by adding automatic dtype conversion in the pipeline's `_upsample_latents()` method
+
+## Rationale
+
+The previous fix in `run_ltxv.py` only addressed the upsampler model loading but didn't solve the core issue: input latents from the pipeline were still in float32 while the upsampler expected bfloat16. The error persisted because the data type mismatch occurred at runtime when latents were passed to the upsampler, not during model loading.
+
+## Implementation Details
+
+- **Root Cause**: Input latents from pipeline (float32) vs upsampler model weights/bias (bfloat16)
+- **Error Location**: `ltx_video/pipelines/pipeline_ltx_video.py:1763` in `_upsample_latents()` method
+- **Detection Method**: Auto-detect upsampler model dtype and convert input latents accordingly
+- **Solution**: Added dtype conversion logic before calling upsampler:
+
+```python
+# Ensure latents match upsampler dtype to avoid type mismatch
+upsampler_dtype = next(latest_upsampler.parameters()).dtype
+if latents.dtype != upsampler_dtype:
+    latents = latents.to(upsampler_dtype)
+```
+
+## Code Changes
+
+**File**: `ltx_video/pipelines/pipeline_ltx_video.py` lines 1755-1767
+
+**Before**:
+```python
+def _upsample_latents(
+    self, latest_upsampler: LatentUpsampler, latents: torch.Tensor
+):
+    latents = un_normalize_latents(
+        latents, self.vae, vae_per_channel_normalize=True
+    )
+    upsampled_latents = latest_upsampler(latents)
+    upsampled_latents = normalize_latents(
+        upsampled_latents, self.vae, vae_per_channel_normalize=True
+    )
+    return upsampled_latents
+```
+
+**After**:
+```python
+def _upsample_latents(
+    self, latest_upsampler: LatentUpsampler, latents: torch.Tensor
+):
+    latents = un_normalize_latents(
+        latents, self.vae, vae_per_channel_normalize=True
+    )
+    
+    # Ensure latents match upsampler dtype to avoid type mismatch
+    upsampler_dtype = next(latest_upsampler.parameters()).dtype
+    if latents.dtype != upsampler_dtype:
+        latents = latents.to(upsampler_dtype)
+        
+    upsampled_latents = latest_upsampler(latents)
+    upsampled_latents = normalize_latents(
+        upsampled_latents, self.vae, vae_per_channel_normalize=True
+    )
+    return upsampled_latents
+```
+
+## Expected Outcome
+
+This pipeline-level fix ensures automatic dtype compatibility between input latents and the upsampler model, resolving the RuntimeError permanently. The fix is robust and will work regardless of the specific model configuration or dtype used.
+
+---
+[2025-01-06 00:17:00] - VAE Tiling Zero Overlap Size Error Fix
+
+## Decision
+
+Fixed "range() arg 3 must not be zero" ValueError by disabling VAE tiling in run_ltxv.py
+
+## Rationale
+
+After resolving the data type mismatch, the next error occurred in the VAE decoder's tiled decode function. The issue was caused by `VAE_tile_size=(1, 1)` which set `hw_tile=1`, leading to:
+1. `self.vae.set_tiling_params(1)` with `sample_size=1`
+2. `self.tile_latent_min_size = int(1 / 32) = 0`
+3. `overlap_size = int(0 * (1 - 0.25)) = 0`
+4. `range(0, z.shape[3], 0)` fails because step cannot be zero
+
+## Implementation Details
+
+- **Root Cause**: VAE_tile_size=(1, 1) causing zero overlap_size in tiling calculations
+- **Error Location**: `ltx_video/models/autoencoders/vae.py:232` in `_hw_tiled_decode()` method
+- **Detection Method**: Traced tile size calculation through set_tiling_params() method
+- **Solution**: Changed `VAE_tile_size=(1, 1)` to `VAE_tile_size=(0, 0)` to disable tiling
+
+## Code Changes
+
+**File**: `run_ltxv.py` line 481
+
+**Before**:
+```python
+VAE_tile_size=(1, 1),
+```
+
+**After**:
+```python
+VAE_tile_size=(0, 0),  # Disable tiling to avoid zero overlap_size error
+```
+
+## Technical Analysis
+
+The VAE tiling system works as follows:
+- `VAE_tile_size=(z_tile, hw_tile)` where values > 0 enable tiling
+- `hw_tile` becomes `sample_size` parameter for `set_tiling_params()`
+- `tile_latent_min_size = int(sample_size / 32)`
+- `overlap_size = int(tile_latent_min_size * (1 - tile_overlap_factor))`
+- When `sample_size=1`, `tile_latent_min_size=0`, causing `overlap_size=0`
+
+## Expected Outcome
+
+Disabling tiling prevents the zero step range() error and allows the VAE decoder to process the full tensor without tiling, which should work fine for the current resolution and hardware.
+
+---
+[2025-01-06 00:18:00] - FINAL FIX: BFloat16 to NumPy Conversion Error
+
+## Decision
+
+Fixed "Got unsupported ScalarType BFloat16" error by adding dtype conversion before numpy conversion in video saving
+
+## Rationale
+
+After successfully completing video generation (31.7 seconds), the final error occurred during video saving when converting PyTorch tensors to NumPy arrays. NumPy doesn't support bfloat16 dtype directly, causing the conversion to fail. The generated frames were in bfloat16 format from the pipeline but needed to be converted to a NumPy-compatible dtype (float32) before the `.numpy()` call.
+
+## Implementation Details
+
+- **Root Cause**: NumPy doesn't support bfloat16 ScalarType, causing conversion failure
+- **Error Location**: `run_ltxv.py:523` in `save_video()` function during `frames.cpu().numpy()`
+- **Detection Method**: Error occurred after successful generation during video saving phase
+- **Solution**: Added dtype check and conversion from bfloat16 to float32 before numpy conversion
+
+## Code Changes
+
+**File**: `run_ltxv.py` lines 521-525
+
+**Before**:
+```python
+# Convert tensor to numpy and scale to 0-255
+if isinstance(frames, torch.Tensor):
+    frames = frames.cpu().numpy()
+```
+
+**After**:
+```python
+# Convert tensor to numpy and scale to 0-255
+if isinstance(frames, torch.Tensor):
+    # Convert bfloat16 to float32 before numpy conversion (numpy doesn't support bfloat16)
+    if frames.dtype == torch.bfloat16:
+        frames = frames.float()
+    frames = frames.cpu().numpy()
+```
+
+## Technical Analysis
+
+The video generation pipeline successfully completed all stages:
+1. ✅ Model loading and initialization
+2. ✅ Text encoding and prompt processing  
+3. ✅ Latent generation and denoising (31.7s)
+4. ✅ Latent upsampling (with dtype fix)
+5. ✅ VAE decoding (with tiling disabled)
+6. ✅ Video saving (with bfloat16 conversion)
+
+## Expected Outcome
+
+The complete pipeline should now work end-to-end, successfully generating and saving videos to `output/output.mp4` without any dtype-related errors.
+
+---

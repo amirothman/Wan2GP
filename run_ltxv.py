@@ -58,13 +58,13 @@ from wan.modules.attention import get_attention_modes
 # ============================================================================
 
 # Generation Parameters
-PROMPT = "A beautiful sunset over mountains, cinematic lighting, golden hour, dramatic clouds"
+PROMPT = "Yamatji woman (deep umber skin, curly black hair, kangaroo-leather skirt) dances across cracked earth. Camera tilts up her henna-toed feet stomping rhythmically, sending sedimentary layers pulsing beneath. Quartz clusters form eye patterns mirroring her hazel gaze as ochre-caked arms conduct stalagmite growth. Warm terracotta shifts to cobalt when she arches backward. Sudden ground rupture sprays mineral mist as she slaps earth, mountains mirroring her frozen pose."  # noqa
 NEGATIVE_PROMPT = "blurry, low quality, distorted, ugly"
 OUTPUT_PATH = "output/output.mp4"
 SEED = 42
-HEIGHT = 720
-WIDTH = 1280
-NUM_FRAMES = 81  # 5 seconds at 16fps
+HEIGHT = 360
+WIDTH = 640
+NUM_FRAMES = 200
 FRAME_RATE = 16
 SAMPLING_STEPS = 10  # Distilled model uses fewer steps for efficiency
 
@@ -520,6 +520,9 @@ def save_video(frames, output_path, fps=16, logger=None):
 
     # Convert tensor to numpy and scale to 0-255
     if isinstance(frames, torch.Tensor):
+        # Convert bfloat16 to float32 before numpy conversion (numpy doesn't support bfloat16)
+        if frames.dtype == torch.bfloat16:
+            frames = frames.float()
         frames = frames.cpu().numpy()
 
     # Ensure frames are in the right format: (T, H, W, C)
