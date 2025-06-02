@@ -64,7 +64,7 @@ OUTPUT_PATH = "output/output.mp4"
 SEED = 42
 HEIGHT = 720
 WIDTH = 1280
-NUM_FRAMES = 81  # 5 seconds at 16fps
+NUM_FRAMES = 200  # 5 seconds at 16fps
 FRAME_RATE = 16
 SAMPLING_STEPS = 10  # Distilled model uses fewer steps for efficiency
 
@@ -76,7 +76,7 @@ MODEL_PATHS = {
     "tokenizer": "ckpts/T5_xxl_1.1",
     "scheduler": "ckpts/ltxv_scheduler.json",
     "upsampler": "ckpts/ltxv_0.9.7_spatial_upscaler.safetensors",
-    "config": "ltx_video/configs/ltxv-13b-0.9.7-distilled.yaml",
+    "config": "ltx_video/configs/ltxv-13b-0.9.7-dev.yaml",
 }
 
 # Model Configuration
