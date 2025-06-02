@@ -58,7 +58,7 @@ from wan.modules.attention import get_attention_modes
 # ============================================================================
 
 # Generation Parameters
-PROMPT = "Low-angle tracking of Indigenous dancer awakening clay mountains: Camera tilts upward from bare feet (henna-dyed toes) stomping red earth to muscular legs (deep umber skin) in kangaroo leather skirt, tracking a Yamatji woman's ritual dance. Her curly black hair swings as shoulder ochre paint cracks like desert clay, each spin triggering sedimentary layers to expand beneath her. Quartz clusters form eye patterns matching her hazel gaze while raised arms conduct stalagmite growth. Warm terracotta hues shift to cobalt as she arches backward, throat chanting vibrating magma fissures into life. Sudden ground rupture releases glowing mineral mist when she slaps palms to earth, camera tilting to capture mountain silhouette mirroring her frozen warrior pose."  # noqa
+PROMPT = "Yamatji woman (deep umber skin, curly black hair, kangaroo-leather skirt) dances across cracked earth. Camera tilts up her henna-toed feet stomping rhythmically, sending sedimentary layers pulsing beneath. Quartz clusters form eye patterns mirroring her hazel gaze as ochre-caked arms conduct stalagmite growth. Warm terracotta shifts to cobalt when she arches backward. Sudden ground rupture sprays mineral mist as she slaps earth, mountains mirroring her frozen pose."  # noqa
 NEGATIVE_PROMPT = "blurry, low quality, distorted, ugly"
 OUTPUT_PATH = "output/output.mp4"
 SEED = 42
