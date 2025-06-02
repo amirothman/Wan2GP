@@ -364,10 +364,11 @@ class MinimalLTXV:
 
         # Load spatial upsampler
         latent_upsampler = (
-            LatentUpsampler.from_pretrained(MODEL_PATHS["upsampler"]).to("cpu").eval()
+            LatentUpsampler.from_pretrained(MODEL_PATHS["upsampler"]).to(self.device).eval()
         )
-        latent_upsampler.to(VAE_DTYPE)
-        latent_upsampler._model_dtype = VAE_DTYPE
+        # Ensure upsampler uses consistent dtype with the pipeline
+        latent_upsampler = latent_upsampler.to(DTYPE)
+        latent_upsampler._model_dtype = DTYPE
 
         # Create pipeline
         submodel_dict = {

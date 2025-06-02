@@ -189,3 +189,49 @@ This file tracks the project's progress using a task list format.
 - 🧪 Test run_ltxv.py with corrected LTXMultiScalePipeline handling
 - 🔍 Monitor for any remaining pipeline issues
 - 📚 Update documentation if needed based on test results
+[2025-01-06 23:10:00] - KeyError: '_attention' Fix - Attention Mechanism Initialization
+
+## Completed Tasks
+
+- ✅ Diagnosed KeyError: '_attention' in wan.modules.attention.pay_attention()
+- ✅ Identified root cause: Missing offload.shared_state["_attention"] initialization
+- ✅ Analyzed attention initialization patterns in wgp.py and i2v_inference.py
+- ✅ Added get_attention_modes import from wan.modules.attention
+- ✅ Created get_attention_mode() function for attention mode selection
+- ✅ Added _initialize_attention() method to MinimalLTXV class
+- ✅ Implemented auto-selection of best available attention mode
+- ✅ Initialize offload.shared_state["_attention"] in constructor
+- ✅ Committed and pushed fix to repository (commit fa97bc2)
+- ✅ Updated Memory Bank with detailed fix documentation
+
+## Current Tasks
+
+- 🔄 Ready for testing of the attention-fixed script
+- 📋 Awaiting validation that the KeyError: '_attention' is resolved
+
+## Next Steps
+
+- 🧪 Test run_ltxv.py with proper attention mechanism initialization
+- 🔍 Monitor for any remaining pipeline issues or next error in sequence
+- 📚 Update documentation if needed based on test results
+[2025-01-06 00:12:00] - PyTorch Data Type Mismatch Fix in run_ltxv.py
+
+## Completed Tasks
+
+- ✅ Diagnosed "Input type (float) and bias type (c10::BFloat16) should be the same" RuntimeError
+- ✅ Identified root cause: Data type mismatch in latent upsampler between input tensors and model weights
+- ✅ Located error source: ltx_video/models/autoencoders/latent_upsampler.py:129 in initial_conv layer
+- ✅ Fixed latent upsampler loading to use consistent device placement (.to(self.device))
+- ✅ Changed upsampler dtype from VAE_DTYPE to DTYPE for pipeline consistency
+- ✅ Updated Memory Bank with detailed fix documentation
+
+## Current Tasks
+
+- 🔄 Ready for testing of the data type fix
+- 📋 Awaiting validation that the RuntimeError is resolved
+
+## Next Steps
+
+- 🧪 Test run_ltxv.py with corrected data type handling
+- 🔍 Monitor for any remaining pipeline issues or next error in sequence
+- 📚 Update documentation if needed based on test results
