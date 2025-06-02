@@ -63,17 +63,17 @@ HEIGHT = 720
 WIDTH = 1280
 NUM_FRAMES = 81  # 5 seconds at 16fps
 FRAME_RATE = 16
-SAMPLING_STEPS = 30  # Dev model uses 30 steps for better quality
+SAMPLING_STEPS = 10  # Distilled model uses fewer steps for efficiency
 
-# Model Paths (based on WanGP structure)
+# Model Paths (based on WanGP structure) - Using quantized model for lower VRAM
 MODEL_PATHS = {
-    "transformer": "ckpts/ltxv_0.9.7_13B_dev_bf16.safetensors",
+    "transformer": "ckpts/ltxv_0.9.7_13B_dev_quanto_bf16_int8.safetensors",
     "vae": "ckpts/ltxv_0.9.7_VAE.safetensors",
     "text_encoder": "ckpts/T5_xxl_1.1/T5_xxl_1.1_enc_bf16.safetensors",
     "tokenizer": "ckpts/T5_xxl_1.1",
     "scheduler": "ckpts/ltxv_scheduler.json",
     "upsampler": "ckpts/ltxv_0.9.7_spatial_upscaler.safetensors",
-    "config": "ltx_video/configs/ltxv-13b-0.9.7-dev.yaml",
+    "config": "ltx_video/configs/ltxv-13b-0.9.7-distilled.yaml",
 }
 
 # Model Configuration
@@ -153,7 +153,7 @@ def download_ltxv_models(logger):
             "ltxv_0.9.7_VAE.safetensors",
             "ltxv_0.9.7_spatial_upscaler.safetensors",
             "ltxv_scheduler.json",
-            "ltxv_0.9.7_13B_dev_bf16.safetensors",
+            "ltxv_0.9.7_13B_dev_quanto_bf16_int8.safetensors",
             "T5_xxl_1.1/T5_xxl_1.1_enc_bf16.safetensors",
         ]
 
@@ -251,12 +251,12 @@ class MinimalLTXV:
         self.pipeline = self._load_pipeline()
 
     def _load_config(self):
-        """Load the dev model configuration."""
+        """Load the distilled model configuration for quantized model."""
         self.logger.info("Loading pipeline configuration...")
         with open(MODEL_PATHS["config"]) as f:
             config = yaml.safe_load(f)
 
-        # Override checkpoint_path to match our actual model file
+        # Override checkpoint_path to match our quantized model file
         config['checkpoint_path'] = MODEL_PATHS['transformer'].replace('ckpts/', '')
 
         # DIAGNOSTIC: Log config details
