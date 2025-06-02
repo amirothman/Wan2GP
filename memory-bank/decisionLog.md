@@ -151,3 +151,30 @@ The script now correctly:
 4. Should resolve the "cannot unpack non-iterable NoneType object" error
 
 ---
+[2025-01-02 23:33:00] - FINAL FIX: VAE_tile_size Parameter Error
+
+## Decision
+
+Fixed the actual root cause: `VAE_tile_size=None` causing unpacking error in pipeline
+
+## Rationale
+
+The detailed traceback revealed the error was on line 1804 in `pipeline_ltx_video.py`:
+```python
+z_tile, hw_tile = VAE_tile_size  # Fails when VAE_tile_size=None
+```
+
+The pipeline expects `VAE_tile_size` to be a tuple that can be unpacked, not `None`.
+
+## Implementation Details
+
+- **Changed**: `VAE_tile_size=None` → `VAE_tile_size=(1, 1)`
+- **Location**: [`run_ltxv.py`](run_ltxv.py:413) line 413
+- **Root Cause**: Parameter type mismatch, not model/config issues
+- **Detection**: Added detailed error tracing to pinpoint exact failure location
+
+## Lesson Learned
+
+The original error message "cannot unpack non-iterable NoneType object" was misleading us to focus on model/config mismatches, when the actual issue was a simple parameter validation problem in the pipeline call.
+
+---

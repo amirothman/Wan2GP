@@ -409,7 +409,7 @@ class MinimalLTXV:
                     image_cond_noise_scale=0.15,
                     mixed_precision=self.config.get("mixed", MIXED_PRECISION),
                     callback=None,
-                    VAE_tile_size=None,
+                    VAE_tile_size=(1, 1),
                     device=self.device,
                 )
             except Exception as e:
