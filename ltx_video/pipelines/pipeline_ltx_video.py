@@ -1760,6 +1760,12 @@ class LTXMultiScalePipeline:
         latents = un_normalize_latents(
             latents, self.vae, vae_per_channel_normalize=True
         )
+        
+        # Ensure latents match upsampler dtype to avoid type mismatch
+        upsampler_dtype = next(latest_upsampler.parameters()).dtype
+        if latents.dtype != upsampler_dtype:
+            latents = latents.to(upsampler_dtype)
+            
         upsampled_latents = latest_upsampler(latents)
         upsampled_latents = normalize_latents(
             upsampled_latents, self.vae, vae_per_channel_normalize=True
