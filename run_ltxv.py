@@ -58,13 +58,13 @@ from wan.modules.attention import get_attention_modes
 # ============================================================================
 
 # Generation Parameters
-PROMPT = "A flaming labyrinth of twisting orange tendrils rises from cracked soil, its walls dissolving into swirling peony petals as the camera slowly pans upward. Impressionist brushstrokes render flames as thick daubs of cadmium red softening into carmine blossoms, embers crystallizing into dewdrops on emerging stamens. The camera arcs at 45 degrees, revealing the metamorphosis midpoint: left-side wildfire ripples into lavender irises with visible paint texture, while right-side poppies retain faint smoke wisps in their cores. Golden sunlight replaces harsh fireglow as the final arch crumbles into cherry blossoms drifting toward the lens. Static wide shot frames pollen motes floating above newborn jade vines, their petals trembling in ash-scented air now sweetened with gardenia."  # noqa
+PROMPT = "Low-angle tracking of Indigenous dancer awakening clay mountains: Camera tilts upward from bare feet (henna-dyed toes) stomping red earth to muscular legs (deep umber skin) in kangaroo leather skirt, tracking a Yamatji woman's ritual dance. Her curly black hair swings as shoulder ochre paint cracks like desert clay, each spin triggering sedimentary layers to expand beneath her. Quartz clusters form eye patterns matching her hazel gaze while raised arms conduct stalagmite growth. Warm terracotta hues shift to cobalt as she arches backward, throat chanting vibrating magma fissures into life. Sudden ground rupture releases glowing mineral mist when she slaps palms to earth, camera tilting to capture mountain silhouette mirroring her frozen warrior pose."  # noqa
 NEGATIVE_PROMPT = "blurry, low quality, distorted, ugly"
 OUTPUT_PATH = "output/output.mp4"
 SEED = 42
-HEIGHT = 480
+HEIGHT = 360
 WIDTH = 640
-NUM_FRAMES = 200  # 5 seconds at 16fps
+NUM_FRAMES = 200
 FRAME_RATE = 16
 SAMPLING_STEPS = 10  # Distilled model uses fewer steps for efficiency
 
