@@ -50,6 +50,9 @@ from ltx_video.pipelines.pipeline_ltx_video import (
 from ltx_video.schedulers.rf import RectifiedFlowScheduler
 from ltx_video.utils.skip_layer_strategy import SkipLayerStrategy
 
+# Import attention utilities
+from wan.modules.attention import get_attention_modes
+
 # ============================================================================
 # HARDCODED CONFIGURATION
 # ============================================================================
@@ -228,6 +231,33 @@ def calculate_padding(
     return (pad_left, pad_right, pad_top, pad_bottom)
 
 
+def get_attention_mode(args_attention, installed_modes):
+    """Decide which attention mode to use: either the user choice or auto fallback."""
+    if args_attention == "auto":
+        for candidate in ["sage2", "sage", "sdpa"]:
+            if candidate in installed_modes:
+                return candidate
+        return "sdpa"  # last fallback
+    if args_attention in installed_modes:
+        return args_attention
+    raise ValueError(
+        f"Requested attention mode '{args_attention}' not installed. "
+        f"Installed modes: {installed_modes}"
+    )
+
+
+def seed_everything(seed):
+    """Set random seeds for reproducibility."""
+    import random
+    import numpy as np
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+
 # ============================================================================
 # LTXV MODEL CLASS
 # ============================================================================
@@ -240,9 +270,12 @@ class MinimalLTXV:
         self.logger = logger
         self.device = get_device()
         self.logger.info(f"Using device: {self.device}")
-        
+
         # Add _interrupt attribute for pipeline compatibility
         self._interrupt = False
+
+        # Initialize attention mechanism
+        self._initialize_attention()
 
         # Load pipeline configuration
         self.config = self._load_config()
@@ -269,6 +302,21 @@ class MinimalLTXV:
         )
 
         return config
+
+    def _initialize_attention(self):
+        """Initialize attention mechanism in shared state."""
+        self.logger.info("Initializing attention mechanism...")
+        
+        # Get available attention modes
+        installed_modes = get_attention_modes()
+        self.logger.info(f"  Available attention modes: {installed_modes}")
+        
+        # Choose attention mode (auto-select best available)
+        chosen_attention = get_attention_mode("auto", installed_modes)
+        self.logger.info(f"  Selected attention mode: {chosen_attention}")
+        
+        # Set in shared state for the attention module to use
+        offload.shared_state["_attention"] = chosen_attention
 
     def _load_pipeline(self):
         """Load and initialize the LTX Video pipeline."""
@@ -297,14 +345,14 @@ class MinimalLTXV:
         # Load Text Encoder
         self.logger.info("  Loading Text Encoder...")
         text_encoder = offload.fast_load_transformers_model(MODEL_PATHS["text_encoder"])
-        
+
         # DIAGNOSTIC: Log text encoder device before moving
         self.logger.info(f"  Text encoder device before move: {next(text_encoder.parameters()).device}")
-        
+
         # Explicitly move text encoder to target device
         text_encoder = text_encoder.to(self.device)
         text_encoder._model_dtype = DTYPE
-        
+
         # DIAGNOSTIC: Log text encoder device after moving
         self.logger.info(f"  Text encoder device after move: {next(text_encoder.parameters()).device}")
 
@@ -338,7 +386,7 @@ class MinimalLTXV:
 
         pipeline = LTXVideoPipeline(**submodel_dict)
         pipeline = LTXMultiScalePipeline(pipeline, latent_upsampler=latent_upsampler)
-        
+
         # Note: LTXMultiScalePipeline doesn't have .to() method - components already on device
         self.logger.info(f"  Pipeline created with components on device: {self.device}")
 
@@ -434,9 +482,9 @@ class MinimalLTXV:
                 )
             except Exception as e:
                 import traceback
-                self.logger.error(f"DETAILED ERROR TRACE:")
+                self.logger.error("DETAILED ERROR TRACE:")
                 self.logger.error(f"Error type: {type(e).__name__}")
-                self.logger.error(f"Error message: {str(e)}")
+                self.logger.error(f"Error message: {e!s}")
                 self.logger.error("Full traceback:")
                 for line in traceback.format_exc().split('\n'):
                     if line.strip():
