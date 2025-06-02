@@ -4,7 +4,7 @@
 
 A stripped-down script to run LTX Video model directly without CLI/Gradio
 complexity.
-Uses the 13B distilled model for fast generation (10 steps vs 30).
+Uses the 13B dev model for high-quality generation (30 steps).
 
 Usage:
     python run_ltxv.py
@@ -63,17 +63,17 @@ HEIGHT = 720
 WIDTH = 1280
 NUM_FRAMES = 81  # 5 seconds at 16fps
 FRAME_RATE = 16
-SAMPLING_STEPS = 10  # Distilled model uses fewer steps
+SAMPLING_STEPS = 30  # Dev model uses 30 steps for better quality
 
 # Model Paths (based on WanGP structure)
 MODEL_PATHS = {
-    "transformer": "ckpts/ltxv_0.9.7_13B_dev_bf16.safetensors",
+    "transformer": "ckpts/ltxv-13b-0.9.7-dev.safetensors",
     "vae": "ckpts/ltxv_0.9.7_VAE.safetensors",
     "text_encoder": "ckpts/T5_xxl_1.1/T5_xxl_1.1_enc_bf16.safetensors",
     "tokenizer": "ckpts/T5_xxl_1.1",
     "scheduler": "ckpts/ltxv_scheduler.json",
     "upsampler": "ckpts/ltxv_0.9.7_spatial_upscaler.safetensors",
-    "config": "ltx_video/configs/ltxv-13b-0.9.7-distilled.yaml",
+    "config": "ltx_video/configs/ltxv-13b-0.9.7-dev.yaml",
 }
 
 # Model Configuration
@@ -153,7 +153,7 @@ def download_ltxv_models(logger):
             "ltxv_0.9.7_VAE.safetensors",
             "ltxv_0.9.7_spatial_upscaler.safetensors",
             "ltxv_scheduler.json",
-            "ltxv_0.9.7_13B_dev_bf16.safetensors",
+            "ltxv-13b-0.9.7-dev.safetensors",
             "T5_xxl_1.1/T5_xxl_1.1_enc_bf16.safetensors",
         ]
 

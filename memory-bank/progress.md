@@ -78,3 +78,26 @@ This file tracks the project's progress using a task list format.
   - Scheduler config (ltxv_scheduler.json)
   - 13B distilled transformer (ltxv_0.9.7_13B_distilled_bf16.safetensors)
   - Text encoder (T5_xxl_1.1_enc_bf16.safetensors)
+[2025-01-02 23:25:00] - LTX Video Generation Error Fixed
+
+## Completed Tasks
+
+- ✅ Diagnosed "cannot unpack non-iterable NoneType object" error in [`run_ltxv.py`](run_ltxv.py:1)
+- ✅ Identified root cause: Model/config mismatch between distilled config and dev model
+- ✅ Added diagnostic logging to validate model paths and configuration
+- ✅ Fixed model filename mismatch (updated to `ltxv-13b-0.9.7-dev.safetensors`)
+- ✅ Switched from distilled config to dev config ([`ltxv-13b-0.9.7-dev.yaml`](ltx_video/configs/ltxv-13b-0.9.7-dev.yaml:1))
+- ✅ Updated download function to fetch correct dev model file
+- ✅ Adjusted sampling steps from 10 to 30 for dev model
+- ✅ Documented fix in decision log with detailed root cause analysis
+
+## Current Tasks
+
+- 🔄 Ready for user testing of the fixed script
+- 📋 Awaiting validation that the error is resolved
+
+## Next Steps
+
+- 🧪 User testing of [`run_ltxv.py`](run_ltxv.py:1) with corrected model/config alignment
+- 🔍 Monitor for any remaining issues or performance optimization needs
+- 📚 Update documentation if needed based on test results

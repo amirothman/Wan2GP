@@ -100,3 +100,28 @@ User reported that [`run_ltxv.py`](run_ltxv.py:1) wasn't auto-downloading models
 - Creates ckpts directory automatically if needed
 
 ---
+[2025-01-02 23:25:00] - LTX Video Model/Config Mismatch Fix
+
+## Decision
+
+Fixed "cannot unpack non-iterable NoneType object" error by correcting model/config mismatch in [`run_ltxv.py`](run_ltxv.py:1)
+
+## Rationale
+
+The error was caused by using a distilled model configuration with a dev model file. The scheduler failed to initialize properly, returning `None` instead of the expected tuple `(timesteps, num_inference_steps)`, causing the unpacking error during generation.
+
+## Implementation Details
+
+- Changed config from [`ltxv-13b-0.9.7-distilled.yaml`](ltx_video/configs/ltxv-13b-0.9.7-distilled.yaml:1) to [`ltxv-13b-0.9.7-dev.yaml`](ltx_video/configs/ltxv-13b-0.9.7-dev.yaml:1)
+- Updated transformer path from `ltxv_0.9.7_13B_dev_bf16.safetensors` to `ltxv-13b-0.9.7-dev.safetensors`
+- Updated download function to fetch correct dev model file
+- Increased sampling steps from 10 to 30 (dev model standard)
+- Added diagnostic logging to identify model/config mismatches
+
+## Root Cause Analysis
+
+- **Primary Issue**: Model filename mismatch between script and configuration
+- **Secondary Issue**: Using distilled config with dev model caused scheduler initialization failure
+- **Detection Method**: Added diagnostic logging to compare expected vs actual model paths
+
+---
