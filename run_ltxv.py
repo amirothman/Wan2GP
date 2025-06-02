@@ -69,7 +69,7 @@ SAMPLING_STEPS = 10  # Distilled model uses fewer steps
 MODEL_PATHS = {
     "transformer": "ckpts/ltxv_0.9.7_13B_dev_bf16.safetensors",
     "vae": "ckpts/ltxv_0.9.7_VAE.safetensors",
-    "text_encoder": "ckpts/T5_xxl_1.1_enc_bf16.safetensors",
+    "text_encoder": "ckpts/T5_xxl_1.1/T5_xxl_1.1_enc_bf16.safetensors",
     "tokenizer": "ckpts/T5_xxl_1.1",
     "scheduler": "ckpts/ltxv_scheduler.json",
     "upsampler": "ckpts/ltxv_0.9.7_spatial_upscaler.safetensors",
