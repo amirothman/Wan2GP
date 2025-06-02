@@ -76,7 +76,7 @@ MODEL_PATHS = {
     "tokenizer": "ckpts/T5_xxl_1.1",
     "scheduler": "ckpts/ltxv_scheduler.json",
     "upsampler": "ckpts/ltxv_0.9.7_spatial_upscaler.safetensors",
-    "config": "ltx_video/configs/ltxv-13b-0.9.7-dev.yaml",
+    "config": "ltx_video/configs/ltxv-13b-0.9.7-distilled.yaml",
 }
 
 # Model Configuration
