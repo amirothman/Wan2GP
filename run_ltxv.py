@@ -252,6 +252,16 @@ class MinimalLTXV:
         self.logger.info("Loading pipeline configuration...")
         with open(MODEL_PATHS["config"]) as f:
             config = yaml.safe_load(f)
+
+        # DIAGNOSTIC: Log config details
+        self.logger.info(
+            f"  Config checkpoint_path: {config.get('checkpoint_path', 'NOT_FOUND')}"
+        )
+        self.logger.info(f"  Actual transformer path: {MODEL_PATHS['transformer']}")
+        self.logger.info(
+            f"  Config pipeline_type: {config.get('pipeline_type', 'NOT_FOUND')}"
+        )
+
         return config
 
     def _load_pipeline(self):
@@ -364,6 +374,15 @@ class MinimalLTXV:
         start_time = time.time()
 
         try:
+            # DIAGNOSTIC: Log pipeline call parameters
+            self.logger.info("  Pipeline call parameters:")
+            self.logger.info(f"    num_inference_steps1: {SAMPLING_STEPS}")
+            self.logger.info(f"    num_inference_steps2: {SAMPLING_STEPS}")
+            self.logger.info(f"    skip_layer_strategy: {skip_layer_strategy}")
+            self.logger.info(
+                f"    height: {height_padded}, width: {width_padded}, frames: {num_frames_padded}"
+            )
+
             images = self.pipeline(
                 **self.config,
                 num_inference_steps1=SAMPLING_STEPS,
