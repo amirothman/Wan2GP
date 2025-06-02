@@ -478,7 +478,7 @@ class MinimalLTXV:
                     image_cond_noise_scale=0.15,
                     mixed_precision=self.config.get("mixed", MIXED_PRECISION),
                     callback=None,
-                    VAE_tile_size=(1, 1),
+                    VAE_tile_size=(0, 0),  # Disable tiling to avoid zero overlap_size error
                     device=self.device,
                 )
             except Exception as e:
