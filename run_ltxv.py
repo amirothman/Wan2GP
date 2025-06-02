@@ -58,7 +58,7 @@ from wan.modules.attention import get_attention_modes
 # ============================================================================
 
 # Generation Parameters
-PROMPT = "A beautiful sunset over mountains, cinematic lighting, golden hour, dramatic clouds"
+PROMPT = "A flaming labyrinth of twisting orange tendrils rises from cracked soil, its walls dissolving into swirling peony petals as the camera slowly pans upward. Impressionist brushstrokes render flames as thick daubs of cadmium red softening into carmine blossoms, embers crystallizing into dewdrops on emerging stamens. The camera arcs at 45 degrees, revealing the metamorphosis midpoint: left-side wildfire ripples into lavender irises with visible paint texture, while right-side poppies retain faint smoke wisps in their cores. Golden sunlight replaces harsh fireglow as the final arch crumbles into cherry blossoms drifting toward the lens. Static wide shot frames pollen motes floating above newborn jade vines, their petals trembling in ash-scented air now sweetened with gardenia."  # noqa
 NEGATIVE_PROMPT = "blurry, low quality, distorted, ugly"
 OUTPUT_PATH = "output/output.mp4"
 SEED = 42
