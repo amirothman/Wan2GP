@@ -124,29 +124,29 @@ def download_ltxv_models(logger):
         return False
 
     logger.info("Downloading LTXV model files...")
-    
+
     try:
         # Create ckpts directory if it doesn't exist
         os.makedirs("ckpts", exist_ok=True)
-        
+
         # Download T5 tokenizer files
         logger.info("  Downloading T5 tokenizer...")
         tokenizer_files = [
             "added_tokens.json",
             "special_tokens_map.json",
             "spiece.model",
-            "tokenizer_config.json"
+            "tokenizer_config.json",
         ]
-        
+
         for file in tokenizer_files:
             if not os.path.exists(f"ckpts/T5_xxl_1.1/{file}"):
                 hf_hub_download(
                     repo_id="DeepBeepMeep/LTX_Video",
                     filename=file,
                     local_dir="ckpts",
-                    subfolder="T5_xxl_1.1"
+                    subfolder="T5_xxl_1.1",
                 )
-        
+
         # Download main model files
         logger.info("  Downloading main model files...")
         main_files = [
@@ -154,20 +154,18 @@ def download_ltxv_models(logger):
             "ltxv_0.9.7_spatial_upscaler.safetensors",
             "ltxv_scheduler.json",
             "ltxv_0.9.7_13B_dev_bf16.safetensors",
-            "T5_xxl_1.1_enc_bf16.safetensors"
+            "T5_xxl_1.1_enc_bf16.safetensors",
         ]
-        
+
         for file in main_files:
             if not os.path.exists(f"ckpts/{file}"):
                 hf_hub_download(
-                    repo_id="DeepBeepMeep/LTX_Video",
-                    filename=file,
-                    local_dir="ckpts"
+                    repo_id="DeepBeepMeep/LTX_Video", filename=file, local_dir="ckpts"
                 )
-        
+
         logger.info("✓ All model files downloaded successfully")
         return True
-        
+
     except Exception as e:
         logger.error(f"Failed to download models: {e}")
         return False
@@ -188,11 +186,11 @@ def check_model_files(logger):
             for name, path in MODEL_PATHS.items():
                 if not os.path.exists(path):
                     missing_files.append(f"{name}: {path}")
-            
+
             if not missing_files:
                 logger.info("✓ All model files are now available")
                 return True
-        
+
         logger.error("Missing model files:")
         for file in missing_files:
             logger.error(f"  - {file}")
