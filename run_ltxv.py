@@ -386,30 +386,42 @@ class MinimalLTXV:
                 f"    height: {height_padded}, width: {width_padded}, frames: {num_frames_padded}"
             )
 
-            images = self.pipeline(
-                **self.config,
-                num_inference_steps1=SAMPLING_STEPS,
-                num_inference_steps2=SAMPLING_STEPS,
-                skip_layer_strategy=skip_layer_strategy,
-                generator=generator,
-                output_type="pt",
-                callback_on_step_end=None,
-                height=height_padded,
-                width=width_padded,
-                num_frames=num_frames_padded,
-                frame_rate=FRAME_RATE,
-                **sample,
-                media_items=None,
-                strength=1.0,
-                conditioning_items=None,
-                is_video=True,
-                vae_per_channel_normalize=True,
-                image_cond_noise_scale=0.15,
-                mixed_precision=self.config.get("mixed", MIXED_PRECISION),
-                callback=None,
-                VAE_tile_size=None,
-                device=self.device,
-            )
+            # DIAGNOSTIC: Try to catch the exact location of the unpacking error
+            try:
+                images = self.pipeline(
+                    **self.config,
+                    num_inference_steps1=SAMPLING_STEPS,
+                    num_inference_steps2=SAMPLING_STEPS,
+                    skip_layer_strategy=skip_layer_strategy,
+                    generator=generator,
+                    output_type="pt",
+                    callback_on_step_end=None,
+                    height=height_padded,
+                    width=width_padded,
+                    num_frames=num_frames_padded,
+                    frame_rate=FRAME_RATE,
+                    **sample,
+                    media_items=None,
+                    strength=1.0,
+                    conditioning_items=None,
+                    is_video=True,
+                    vae_per_channel_normalize=True,
+                    image_cond_noise_scale=0.15,
+                    mixed_precision=self.config.get("mixed", MIXED_PRECISION),
+                    callback=None,
+                    VAE_tile_size=None,
+                    device=self.device,
+                )
+            except Exception as e:
+                import traceback
+                self.logger.error(f"DETAILED ERROR TRACE:")
+                self.logger.error(f"Error type: {type(e).__name__}")
+                self.logger.error(f"Error message: {str(e)}")
+                self.logger.error("Full traceback:")
+                for line in traceback.format_exc().split('\n'):
+                    if line.strip():
+                        self.logger.error(f"  {line}")
+                raise
 
             if images is None:
                 raise RuntimeError("Generation failed - pipeline returned None")
