@@ -520,6 +520,9 @@ def save_video(frames, output_path, fps=16, logger=None):
 
     # Convert tensor to numpy and scale to 0-255
     if isinstance(frames, torch.Tensor):
+        # Convert bfloat16 to float32 before numpy conversion (numpy doesn't support bfloat16)
+        if frames.dtype == torch.bfloat16:
+            frames = frames.float()
         frames = frames.cpu().numpy()
 
     # Ensure frames are in the right format: (T, H, W, C)
