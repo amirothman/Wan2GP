@@ -154,7 +154,7 @@ def download_ltxv_models(logger):
             "ltxv_0.9.7_spatial_upscaler.safetensors",
             "ltxv_scheduler.json",
             "ltxv_0.9.7_13B_dev_bf16.safetensors",
-            "T5_xxl_1.1_enc_bf16.safetensors",
+            "T5_xxl_1.1/T5_xxl_1.1_enc_bf16.safetensors",
         ]
 
         for file in main_files:
