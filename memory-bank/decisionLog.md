@@ -286,3 +286,79 @@ The error occurred because `LTXMultiScalePipeline` is not a PyTorch module and d
 4. **Component Verification**: Confirmed individual components already on correct device
 
 ---
+[2025-01-06 23:10:00] - KeyError: '_attention' Fix - Attention Mechanism Initialization
+
+## Decision
+
+Fixed KeyError: '_attention' by properly initializing the attention mechanism in offload.shared_state
+
+## Rationale
+
+The error occurred because `wan.modules.attention.pay_attention()` function tries to access `offload.shared_state["_attention"]` but this key was never initialized. The attention mechanism needs to be set up before the pipeline runs, similar to how it's done in `wgp.py` and `i2v_inference.py`.
+
+## Implementation Details
+
+- **Root Cause**: Missing initialization of `offload.shared_state["_attention"]` key
+- **Detection Method**: Error traceback showed KeyError at `wan/modules/attention.py:188`
+- **Solution**: 
+  1. Added import for `get_attention_modes` from `wan.modules.attention`
+  2. Created `get_attention_mode()` function to select best available attention mode
+  3. Added `_initialize_attention()` method to MinimalLTXV class
+  4. Initialize `offload.shared_state["_attention"]` with auto-selected mode in constructor
+- **Attention Selection**: Auto-selects best available mode from ["sage2", "sage", "sdpa"]
+
+## Analysis Process
+
+1. **Error Analysis**: KeyError: '_attention' at wan/modules/attention.py:188
+2. **Code Investigation**: Found `offload.shared_state["_attention"]` access without initialization
+3. **Reference Check**: Examined how wgp.py and i2v_inference.py initialize attention
+4. **Implementation**: Added proper attention initialization following existing patterns
+
+## Expected Outcome
+
+The pipeline should now proceed past the attention initialization and continue with video generation.
+
+---
+[2025-01-06 00:12:00] - PyTorch Data Type Mismatch Fix in Latent Upsampler
+
+## Decision
+
+Fixed "Input type (float) and bias type (c10::BFloat16) should be the same" RuntimeError in LTX Video pipeline
+
+## Rationale
+
+The error occurred in the latent upsampler's `initial_conv` layer where input tensors (float32) and model weights/bias (bfloat16) had mismatched data types. The upsampler was being loaded to CPU first, then moved to `VAE_DTYPE`, but the input latents from the pipeline were in a different dtype, causing the PyTorch conv3d operation to fail.
+
+## Implementation Details
+
+- **Root Cause**: Data type mismatch between input latents (float32) and upsampler model (bfloat16)
+- **Error Location**: `ltx_video/models/autoencoders/latent_upsampler.py:129` in `initial_conv(latent)`
+- **Detection Method**: Error traceback showed conv3d operation failing due to dtype mismatch
+- **Solution**: 
+  1. Changed upsampler loading from `.to("cpu")` to `.to(self.device)` 
+  2. Changed dtype from `VAE_DTYPE` to `DTYPE` for consistency with pipeline
+  3. Ensured upsampler uses same dtype as other pipeline components
+
+## Code Changes
+
+```python
+# Before (lines 365-370):
+latent_upsampler = (
+    LatentUpsampler.from_pretrained(MODEL_PATHS["upsampler"]).to("cpu").eval()
+)
+latent_upsampler.to(VAE_DTYPE)
+latent_upsampler._model_dtype = VAE_DTYPE
+
+# After:
+latent_upsampler = (
+    LatentUpsampler.from_pretrained(MODEL_PATHS["upsampler"]).to(self.device).eval()
+)
+latent_upsampler = latent_upsampler.to(DTYPE)
+latent_upsampler._model_dtype = DTYPE
+```
+
+## Expected Outcome
+
+The pipeline should now proceed past the upsampling stage without data type mismatch errors, allowing video generation to complete successfully.
+
+---
