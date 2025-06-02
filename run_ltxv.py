@@ -67,7 +67,7 @@ SAMPLING_STEPS = 30  # Dev model uses 30 steps for better quality
 
 # Model Paths (based on WanGP structure)
 MODEL_PATHS = {
-    "transformer": "ckpts/ltxv-13b-0.9.7-dev.safetensors",
+    "transformer": "ckpts/ltxv_0.9.7_13B_dev_bf16.safetensors",
     "vae": "ckpts/ltxv_0.9.7_VAE.safetensors",
     "text_encoder": "ckpts/T5_xxl_1.1/T5_xxl_1.1_enc_bf16.safetensors",
     "tokenizer": "ckpts/T5_xxl_1.1",
@@ -153,7 +153,7 @@ def download_ltxv_models(logger):
             "ltxv_0.9.7_VAE.safetensors",
             "ltxv_0.9.7_spatial_upscaler.safetensors",
             "ltxv_scheduler.json",
-            "ltxv-13b-0.9.7-dev.safetensors",
+            "ltxv_0.9.7_13B_dev_bf16.safetensors",
             "T5_xxl_1.1/T5_xxl_1.1_enc_bf16.safetensors",
         ]
 
@@ -248,10 +248,13 @@ class MinimalLTXV:
         self.pipeline = self._load_pipeline()
 
     def _load_config(self):
-        """Load the distilled model configuration."""
+        """Load the dev model configuration."""
         self.logger.info("Loading pipeline configuration...")
         with open(MODEL_PATHS["config"]) as f:
             config = yaml.safe_load(f)
+
+        # Override checkpoint_path to match our actual model file
+        config['checkpoint_path'] = MODEL_PATHS['transformer'].replace('ckpts/', '')
 
         # DIAGNOSTIC: Log config details
         self.logger.info(

@@ -125,3 +125,29 @@ The error was caused by using a distilled model configuration with a dev model f
 - **Detection Method**: Added diagnostic logging to compare expected vs actual model paths
 
 ---
+[2025-01-02 23:30:00] - Final Fix: Model Filename Correction
+
+## Decision
+
+Corrected the final model filename mismatch to use the existing `ltxv_0.9.7_13B_dev_bf16.safetensors` file
+
+## Rationale
+
+The HuggingFace repository contains `ltxv_0.9.7_13B_dev_bf16.safetensors`, not `ltxv-13b-0.9.7-dev.safetensors`. The user already had the correct file downloaded, so we needed to use the actual filename.
+
+## Implementation Details
+
+- **Model path**: Reverted to `ckpts/ltxv_0.9.7_13B_dev_bf16.safetensors` (matches existing file)
+- **Config override**: Added `config['checkpoint_path'] = MODEL_PATHS['transformer'].replace('ckpts/', '')` to align config with actual model
+- **Download function**: Updated to download `ltxv_0.9.7_13B_dev_bf16.safetensors`
+- **Configuration**: Using [`ltxv-13b-0.9.7-dev.yaml`](ltx_video/configs/ltxv-13b-0.9.7-dev.yaml:1) with 30 sampling steps
+
+## Final Solution
+
+The script now correctly:
+1. Uses the existing model file that was already downloaded
+2. Loads the appropriate dev configuration 
+3. Overrides the config's checkpoint_path to match the actual model filename
+4. Should resolve the "cannot unpack non-iterable NoneType object" error
+
+---
