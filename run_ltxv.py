@@ -4,7 +4,7 @@
 
 A stripped-down script to run LTX Video model directly without CLI/Gradio
 complexity.
-Uses the 13B distilled model for fast generation (10 steps vs 30).
+Uses the 13B dev model for high-quality generation (30 steps).
 
 Usage:
     python run_ltxv.py
@@ -63,17 +63,17 @@ HEIGHT = 720
 WIDTH = 1280
 NUM_FRAMES = 81  # 5 seconds at 16fps
 FRAME_RATE = 16
-SAMPLING_STEPS = 10  # Distilled model uses fewer steps
+SAMPLING_STEPS = 30  # Dev model uses 30 steps for better quality
 
 # Model Paths (based on WanGP structure)
 MODEL_PATHS = {
     "transformer": "ckpts/ltxv_0.9.7_13B_dev_bf16.safetensors",
     "vae": "ckpts/ltxv_0.9.7_VAE.safetensors",
-    "text_encoder": "ckpts/T5_xxl_1.1_enc_bf16.safetensors",
+    "text_encoder": "ckpts/T5_xxl_1.1/T5_xxl_1.1_enc_bf16.safetensors",
     "tokenizer": "ckpts/T5_xxl_1.1",
     "scheduler": "ckpts/ltxv_scheduler.json",
     "upsampler": "ckpts/ltxv_0.9.7_spatial_upscaler.safetensors",
-    "config": "ltx_video/configs/ltxv-13b-0.9.7-distilled.yaml",
+    "config": "ltx_video/configs/ltxv-13b-0.9.7-dev.yaml",
 }
 
 # Model Configuration
@@ -154,7 +154,7 @@ def download_ltxv_models(logger):
             "ltxv_0.9.7_spatial_upscaler.safetensors",
             "ltxv_scheduler.json",
             "ltxv_0.9.7_13B_dev_bf16.safetensors",
-            "T5_xxl_1.1_enc_bf16.safetensors",
+            "T5_xxl_1.1/T5_xxl_1.1_enc_bf16.safetensors",
         ]
 
         for file in main_files:
@@ -248,10 +248,23 @@ class MinimalLTXV:
         self.pipeline = self._load_pipeline()
 
     def _load_config(self):
-        """Load the distilled model configuration."""
+        """Load the dev model configuration."""
         self.logger.info("Loading pipeline configuration...")
         with open(MODEL_PATHS["config"]) as f:
             config = yaml.safe_load(f)
+
+        # Override checkpoint_path to match our actual model file
+        config['checkpoint_path'] = MODEL_PATHS['transformer'].replace('ckpts/', '')
+
+        # DIAGNOSTIC: Log config details
+        self.logger.info(
+            f"  Config checkpoint_path: {config.get('checkpoint_path', 'NOT_FOUND')}"
+        )
+        self.logger.info(f"  Actual transformer path: {MODEL_PATHS['transformer']}")
+        self.logger.info(
+            f"  Config pipeline_type: {config.get('pipeline_type', 'NOT_FOUND')}"
+        )
+
         return config
 
     def _load_pipeline(self):
@@ -364,30 +377,51 @@ class MinimalLTXV:
         start_time = time.time()
 
         try:
-            images = self.pipeline(
-                **self.config,
-                num_inference_steps1=SAMPLING_STEPS,
-                num_inference_steps2=SAMPLING_STEPS,
-                skip_layer_strategy=skip_layer_strategy,
-                generator=generator,
-                output_type="pt",
-                callback_on_step_end=None,
-                height=height_padded,
-                width=width_padded,
-                num_frames=num_frames_padded,
-                frame_rate=FRAME_RATE,
-                **sample,
-                media_items=None,
-                strength=1.0,
-                conditioning_items=None,
-                is_video=True,
-                vae_per_channel_normalize=True,
-                image_cond_noise_scale=0.15,
-                mixed_precision=self.config.get("mixed", MIXED_PRECISION),
-                callback=None,
-                VAE_tile_size=None,
-                device=self.device,
+            # DIAGNOSTIC: Log pipeline call parameters
+            self.logger.info("  Pipeline call parameters:")
+            self.logger.info(f"    num_inference_steps1: {SAMPLING_STEPS}")
+            self.logger.info(f"    num_inference_steps2: {SAMPLING_STEPS}")
+            self.logger.info(f"    skip_layer_strategy: {skip_layer_strategy}")
+            self.logger.info(
+                f"    height: {height_padded}, width: {width_padded}, frames: {num_frames_padded}"
             )
+
+            # DIAGNOSTIC: Try to catch the exact location of the unpacking error
+            try:
+                images = self.pipeline(
+                    **self.config,
+                    num_inference_steps1=SAMPLING_STEPS,
+                    num_inference_steps2=SAMPLING_STEPS,
+                    skip_layer_strategy=skip_layer_strategy,
+                    generator=generator,
+                    output_type="pt",
+                    callback_on_step_end=None,
+                    height=height_padded,
+                    width=width_padded,
+                    num_frames=num_frames_padded,
+                    frame_rate=FRAME_RATE,
+                    **sample,
+                    media_items=None,
+                    strength=1.0,
+                    conditioning_items=None,
+                    is_video=True,
+                    vae_per_channel_normalize=True,
+                    image_cond_noise_scale=0.15,
+                    mixed_precision=self.config.get("mixed", MIXED_PRECISION),
+                    callback=None,
+                    VAE_tile_size=(1, 1),
+                    device=self.device,
+                )
+            except Exception as e:
+                import traceback
+                self.logger.error(f"DETAILED ERROR TRACE:")
+                self.logger.error(f"Error type: {type(e).__name__}")
+                self.logger.error(f"Error message: {str(e)}")
+                self.logger.error("Full traceback:")
+                for line in traceback.format_exc().split('\n'):
+                    if line.strip():
+                        self.logger.error(f"  {line}")
+                raise
 
             if images is None:
                 raise RuntimeError("Generation failed - pipeline returned None")

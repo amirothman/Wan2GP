@@ -100,3 +100,81 @@ User reported that [`run_ltxv.py`](run_ltxv.py:1) wasn't auto-downloading models
 - Creates ckpts directory automatically if needed
 
 ---
+[2025-01-02 23:25:00] - LTX Video Model/Config Mismatch Fix
+
+## Decision
+
+Fixed "cannot unpack non-iterable NoneType object" error by correcting model/config mismatch in [`run_ltxv.py`](run_ltxv.py:1)
+
+## Rationale
+
+The error was caused by using a distilled model configuration with a dev model file. The scheduler failed to initialize properly, returning `None` instead of the expected tuple `(timesteps, num_inference_steps)`, causing the unpacking error during generation.
+
+## Implementation Details
+
+- Changed config from [`ltxv-13b-0.9.7-distilled.yaml`](ltx_video/configs/ltxv-13b-0.9.7-distilled.yaml:1) to [`ltxv-13b-0.9.7-dev.yaml`](ltx_video/configs/ltxv-13b-0.9.7-dev.yaml:1)
+- Updated transformer path from `ltxv_0.9.7_13B_dev_bf16.safetensors` to `ltxv-13b-0.9.7-dev.safetensors`
+- Updated download function to fetch correct dev model file
+- Increased sampling steps from 10 to 30 (dev model standard)
+- Added diagnostic logging to identify model/config mismatches
+
+## Root Cause Analysis
+
+- **Primary Issue**: Model filename mismatch between script and configuration
+- **Secondary Issue**: Using distilled config with dev model caused scheduler initialization failure
+- **Detection Method**: Added diagnostic logging to compare expected vs actual model paths
+
+---
+[2025-01-02 23:30:00] - Final Fix: Model Filename Correction
+
+## Decision
+
+Corrected the final model filename mismatch to use the existing `ltxv_0.9.7_13B_dev_bf16.safetensors` file
+
+## Rationale
+
+The HuggingFace repository contains `ltxv_0.9.7_13B_dev_bf16.safetensors`, not `ltxv-13b-0.9.7-dev.safetensors`. The user already had the correct file downloaded, so we needed to use the actual filename.
+
+## Implementation Details
+
+- **Model path**: Reverted to `ckpts/ltxv_0.9.7_13B_dev_bf16.safetensors` (matches existing file)
+- **Config override**: Added `config['checkpoint_path'] = MODEL_PATHS['transformer'].replace('ckpts/', '')` to align config with actual model
+- **Download function**: Updated to download `ltxv_0.9.7_13B_dev_bf16.safetensors`
+- **Configuration**: Using [`ltxv-13b-0.9.7-dev.yaml`](ltx_video/configs/ltxv-13b-0.9.7-dev.yaml:1) with 30 sampling steps
+
+## Final Solution
+
+The script now correctly:
+1. Uses the existing model file that was already downloaded
+2. Loads the appropriate dev configuration 
+3. Overrides the config's checkpoint_path to match the actual model filename
+4. Should resolve the "cannot unpack non-iterable NoneType object" error
+
+---
+[2025-01-02 23:33:00] - FINAL FIX: VAE_tile_size Parameter Error
+
+## Decision
+
+Fixed the actual root cause: `VAE_tile_size=None` causing unpacking error in pipeline
+
+## Rationale
+
+The detailed traceback revealed the error was on line 1804 in `pipeline_ltx_video.py`:
+```python
+z_tile, hw_tile = VAE_tile_size  # Fails when VAE_tile_size=None
+```
+
+The pipeline expects `VAE_tile_size` to be a tuple that can be unpacked, not `None`.
+
+## Implementation Details
+
+- **Changed**: `VAE_tile_size=None` → `VAE_tile_size=(1, 1)`
+- **Location**: [`run_ltxv.py`](run_ltxv.py:413) line 413
+- **Root Cause**: Parameter type mismatch, not model/config issues
+- **Detection**: Added detailed error tracing to pinpoint exact failure location
+
+## Lesson Learned
+
+The original error message "cannot unpack non-iterable NoneType object" was misleading us to focus on model/config mismatches, when the actual issue was a simple parameter validation problem in the pipeline call.
+
+---
