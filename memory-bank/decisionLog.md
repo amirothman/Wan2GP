@@ -178,3 +178,30 @@ The pipeline expects `VAE_tile_size` to be a tuple that can be unpacked, not `No
 The original error message "cannot unpack non-iterable NoneType object" was misleading us to focus on model/config mismatches, when the actual issue was a simple parameter validation problem in the pipeline call.
 
 ---
+[2025-01-06 23:36:00] - KeyError: 'ltxv_model' Pipeline Parameter Fix
+
+## Decision
+
+Fixed KeyError: 'ltxv_model' by adding missing pipeline parameter and _interrupt attribute
+
+## Rationale
+
+The LTX Video pipeline expects an `ltxv_model` parameter in kwargs (line 1812 in pipeline_ltx_video.py), but run_ltxv.py wasn't passing this parameter. Analysis of ltx_video/ltxv.py:418 showed the correct usage: `ltxv_model = self`. The pipeline only uses this parameter to check `ltxv_model._interrupt` for interruption handling.
+
+## Implementation Details
+
+- **Root Cause**: Missing `ltxv_model` parameter in pipeline call at run_ltxv.py:391
+- **Detection Method**: Analyzed pipeline code and compared with working implementation in ltx_video/ltxv.py
+- **Solution**: 
+  1. Added `self._interrupt = False` attribute to MinimalLTXV class initialization
+  2. Added `ltxv_model=self` parameter to pipeline call
+- **Pipeline Usage**: Pipeline only accesses `ltxv_model._interrupt` to check for interruption requests
+
+## Diagnosis Process
+
+1. **Error Analysis**: KeyError: 'ltxv_model' at pipeline_ltx_video.py:1812
+2. **Code Investigation**: Found pipeline expects ltxv_model = kwargs["ltxv_model"]
+3. **Reference Check**: Examined ltx_video/ltxv.py:418 for correct usage pattern
+4. **Minimal Fix**: Created compatible object with required _interrupt attribute
+
+---

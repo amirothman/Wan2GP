@@ -101,3 +101,25 @@ This file tracks the project's progress using a task list format.
 - 🧪 User testing of [`run_ltxv.py`](run_ltxv.py:1) with corrected model/config alignment
 - 🔍 Monitor for any remaining issues or performance optimization needs
 - 📚 Update documentation if needed based on test results
+[2025-01-06 23:36:00] - KeyError: 'ltxv_model' Debug and Fix
+
+## Completed Tasks
+
+- ✅ Diagnosed KeyError: 'ltxv_model' in LTX Video pipeline
+- ✅ Identified root cause: Missing ltxv_model parameter in pipeline call
+- ✅ Analyzed pipeline code to understand parameter requirements
+- ✅ Compared with working implementation in ltx_video/ltxv.py
+- ✅ Added _interrupt attribute to MinimalLTXV class for pipeline compatibility
+- ✅ Fixed pipeline call by adding ltxv_model=self parameter
+- ✅ Documented fix in decision log with detailed analysis
+
+## Current Tasks
+
+- 🔄 Ready for user testing of the fixed script
+- 📋 Awaiting validation that the KeyError is resolved
+
+## Next Steps
+
+- 🧪 User testing of run_ltxv.py with corrected ltxv_model parameter
+- 🔍 Monitor for any remaining pipeline issues
+- 📚 Update documentation if needed based on test results
