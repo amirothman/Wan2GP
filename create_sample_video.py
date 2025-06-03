@@ -70,10 +70,8 @@ def script_send_cmd(command, data=None):
         # if data is not None but not a list as expected for progress
         elif data:
             print(f"Progress (unexpected data format): {data}")
-        # If data is None for progress, we might choose to print nothing
-        # or a generic message
-        # else:
-        #     print("Progress update (no data).")
+        else:
+            print("Progress update (no data).")
     elif command == "preview":
         print("Preview generated (not shown in script mode).")
     elif command == "output":
@@ -108,8 +106,7 @@ script_task_item = {
 }
 
 video_params = {
-    "prompt": "A cute cat wearing a wizard hat, cinematic lighting, "
-              "high detail",
+    "prompt": "A cute cat wearing a wizard hat, cinematic lighting, high detail",
     "negative_prompt": "blurry, low quality, ugly, deformed",
     "resolution": "832x480",
     "video_length": 17,
@@ -177,8 +174,7 @@ if __name__ == "__main__":
     # Ensure settings directory from wgp.args is created if not
     # already by wgp.py
     # This is a bit redundant if wgp.py already does it, but safe.
-    if hasattr(wgp, "args") and hasattr(wgp.args, "settings") \
-            and wgp.args.settings:
+    if hasattr(wgp, "args") and hasattr(wgp.args, "settings") and wgp.args.settings:
         if not os.path.exists(wgp.args.settings):
             os.makedirs(wgp.args.settings, exist_ok=True)
             print(f"Ensured settings directory exists: {wgp.args.settings}")
