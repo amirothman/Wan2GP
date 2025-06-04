@@ -23,6 +23,9 @@ Implemented comprehensive Memory Bank system to maintain project context across 
 
 ## Decision
 
+**ADDITIONAL FIX**: Also corrected sliding_window_size from 130 to 129
+
+The error persisted after the first fix because the sliding window logic in wgp.py uses sliding_window_size to calculate the actual frame count. The sliding_window_size=130 (130%8=2) was causing the final frame count to violate the constraint. Changed sliding_window_size from 130 to 129 (129%8=1) to ensure compatibility.
 Project Analysis Approach
 
 ## Rationale
