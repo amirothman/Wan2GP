@@ -1406,7 +1406,8 @@ class LTXVideoPipeline(DiffusionPipeline):
                 assert (
                     height == h and width == w
                 ) or media_frame_number == 0, f"Dimensions do not match: {height}x{width} != {h}x{w} - allowed only when media_frame_number == 0"
-                assert n_frames % 8 == 1
+                print(f"DEBUG: n_frames={n_frames}, n_frames % 8 = {n_frames % 8}")
+                assert n_frames % 8 == 1, f"n_frames={n_frames} does not satisfy n_frames % 8 == 1 (got {n_frames % 8})"
                 assert (
                     media_frame_number >= 0
                     and media_frame_number + n_frames <= num_frames
