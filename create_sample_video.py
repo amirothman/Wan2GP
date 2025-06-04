@@ -116,10 +116,10 @@ script_task_item = {
 }
 
 video_params = {
-    "prompt": "Celestial ballerina dances across constellation strings in cosmic ballet, star-map animation, dramatic backlit arabesques",
+    "prompt": "Pole dancer performs acrobatics in zero-G club, metallic pasties catching light during spinning descents",
     "negative_prompt": "blurry, low quality, ugly, deformed",
     "resolution": "832x480",
-    "video_length": 241,  # Must be 8k+1 for LTX Video (240%8=0, 241%8=1)
+    "video_length": 482,  # Must be 8k+1 for LTX Video (240%8=0, 241%8=1)
     "seed": -1,
     "num_inference_steps": 20,
     "guidance_scale": 7.0,
@@ -144,8 +144,8 @@ video_params = {
     "keep_frames_video_guide": "",
     "video_mask": None,
     "audio_guide": None,
-    "sliding_window_size": 129,  # Must be 8k+1 for LTX Video (129%8=1)
-    "sliding_window_overlap": 5,
+    "sliding_window_size": 257,  # Must be 8k+1 for LTX Video (129%8=1)
+    "sliding_window_overlap": 9,
     "sliding_window_overlap_noise": 20,
     "sliding_window_discard_last_frames": 8,
     "remove_background_images_ref": 0,
