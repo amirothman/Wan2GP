@@ -9,7 +9,7 @@ from ltx_video.utils.prompt_enhance_utils import generate_cinematic_prompt  # Fo
 
 # 1. Initialize minimal state and helper functions
 # A default T2V model
-model_name = "ckpts/wan2.1_text2video_1.3B_bf16.safetensors"
+model_name = "ckpts/ltxv_0.9.7_13B_dev_quanto_bf16_int8.safetensors"
 
 # Prompt enhancer configuration
 ENABLE_PROMPT_ENHANCER = True  # Set to False to disable prompt enhancement
@@ -213,10 +213,75 @@ if __name__ == "__main__":
             "if the model supports it."
         )
 
+    # Download prompt enhancer models if needed
+    def download_prompt_enhancer_models():
+        """Download Llama3_2 model for prompt enhancement if missing."""
+        try:
+            from huggingface_hub import hf_hub_download
+            
+            # Check if model files exist
+            required_files = [
+                "config.json",
+                "generation_config.json",
+                "Llama3_2_quanto_bf16_int8.safetensors",
+                "special_tokens_map.json",
+                "tokenizer.json",
+                "tokenizer_config.json"
+            ]
+            
+            missing_files = []
+            for filename in required_files:
+                file_path = os.path.join(LLM_ENHANCER_MODEL_DIR, filename)
+                if not os.path.isfile(file_path):
+                    missing_files.append(filename)
+            
+            if not missing_files:
+                print("✅ All Llama3_2 model files already present")
+                return True
+                
+            print(f"📥 Downloading {len(missing_files)} missing Llama3_2 model files...")
+            
+            # Create directory if needed
+            os.makedirs(LLM_ENHANCER_MODEL_DIR, exist_ok=True)
+            
+            # Download missing files
+            repo_id = "DeepBeepMeep/LTX_Video"
+            subfolder = "Llama3_2"
+            
+            for filename in missing_files:
+                print(f"⬇️  Downloading {filename}...")
+                try:
+                    hf_hub_download(
+                        repo_id=repo_id,
+                        filename=filename,
+                        local_dir="ckpts",
+                        subfolder=subfolder
+                    )
+                    print(f"✅ {filename} downloaded successfully")
+                except Exception as e:
+                    print(f"❌ Failed to download {filename}: {e}")
+                    return False
+            
+            print("🎉 All Llama3_2 model files downloaded successfully!")
+            return True
+            
+        except ImportError:
+            print("❌ huggingface_hub not available. Please install: pip install huggingface_hub")
+            return False
+        except Exception as e:
+            print(f"❌ Error downloading models: {e}")
+            return False
+
     # Load prompt enhancer models if enabled
     loaded_enhancer_llm_model = None
     loaded_enhancer_llm_tokenizer = None
 
+    if ENABLE_PROMPT_ENHANCER:
+        # Download models if missing
+        if not download_prompt_enhancer_models():
+            print("Failed to download prompt enhancer models. Disabling enhancement.")
+            ENABLE_PROMPT_ENHANCER = False
+        
     if ENABLE_PROMPT_ENHANCER:
         print("Prompt enhancer enabled. Attempting to load LLM model and tokenizer...")
         try:
