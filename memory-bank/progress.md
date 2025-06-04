@@ -349,3 +349,24 @@ The prompt enhancer integration is now fully implemented in create_sample_video.
 - 🔧 Address Flake8 line length warnings if code style compliance is required
 - 📊 Performance evaluation of enhanced vs original prompts
 - 🔍 Optional: Implement standard Hugging Face loading fallback for environments without wgp.offload
+[2025-01-06 22:47:00] - LTX Video Frame Count Assertion Error Fix
+
+## Completed Tasks
+
+- ✅ Diagnosed "assert n_frames % 8 == 1" AssertionError in create_sample_video.py
+- ✅ Identified root cause: video_length=240 doesn't satisfy LTX Video frame count constraint
+- ✅ Located error source: ltx_video/pipelines/pipeline_ltx_video.py:1409 in prepare_conditioning()
+- ✅ Fixed by changing video_length from 240 to 241 (241 % 8 = 1)
+- ✅ Added explanatory comment about LTX Video frame count requirement
+- ✅ Updated Memory Bank with detailed technical analysis
+
+## Current Tasks
+
+- 🔄 Ready for testing of the frame count fix
+- 📋 Awaiting validation that the AssertionError is resolved
+
+## Next Steps
+
+- 🧪 Test create_sample_video.py with corrected frame count (241)
+- 🔍 Monitor for successful video generation without assertion errors
+- 📚 Update documentation if needed based on test results

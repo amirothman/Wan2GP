@@ -119,7 +119,7 @@ video_params = {
     "prompt": "Celestial ballerina dances across constellation strings in cosmic ballet, star-map animation, dramatic backlit arabesques",
     "negative_prompt": "blurry, low quality, ugly, deformed",
     "resolution": "832x480",
-    "video_length": 240,
+    "video_length": 241,  # Must be 8k+1 for LTX Video (240%8=0, 241%8=1)
     "seed": -1,
     "num_inference_steps": 20,
     "guidance_scale": 7.0,
