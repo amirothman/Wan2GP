@@ -533,3 +533,37 @@ The video generation pipeline successfully completed all stages:
 The complete pipeline should now work end-to-end, successfully generating and saving videos to `output/output.mp4` without any dtype-related errors.
 
 ---
+[2025-01-06 21:00:00] - Prompt Enhancer Integration in create_sample_video.py
+
+## Decision
+
+Integrated T2V prompt enhancement functionality into create_sample_video.py using existing LTX Video utilities and Llama3_2 quantized model
+
+## Rationale
+
+User requested planning and implementation of prompt enhancer in create_sample_video.py. Analysis revealed existing utilities in ltx_video/utils/prompt_enhance_utils.py and model configuration in wgp.py using Llama3_2 quantized model. Integration provides cinematic prompt enhancement while maintaining script simplicity and compatibility.
+
+## Implementation Details
+
+- **Configuration**: Added ENABLE_PROMPT_ENHANCER flag and model path constants
+- **Model Loading**: Implemented conditional loading of Llama3_2 quantized model and tokenizer
+  - Primary: Uses wgp.offload.fast_load_transformers_model for consistency with wgp.py
+  - Fallback: Placeholder for standard Hugging Face loading if wgp.offload unavailable
+- **Enhancement Logic**: 
+  - Calls generate_cinematic_prompt() in T2V mode (no images)
+  - Applies proper seeding before enhancement
+  - Updates both video_params["prompt"] and script_task_item["prompt"]
+  - Logs original and enhanced prompts for user visibility
+- **Error Handling**: Graceful fallback to original prompt if enhancement fails
+- **Device Management**: Ensures enhancer model uses same device as main video model
+
+## Technical Specifications
+
+- **Models Used**: 
+  - LLM: ckpts/Llama3_2/Llama3_2_quanto_bf16_int8.safetensors
+  - Tokenizer: ckpts/Llama3_2
+- **Enhancement Parameters**: max_new_tokens=256, T2V_CINEMATIC_PROMPT system message
+- **Integration Point**: Before wgp.generate_video() call, after device setup
+- **Compatibility**: Maintains all existing create_sample_video.py functionality
+
+---

@@ -1,12 +1,20 @@
 import os  # For path joining
+import random  # For fallback seeding
 
 import torch  # Used by wgp.py, good for type hints
+from transformers import AutoTokenizer  # For prompt enhancer
 
 import wgp
+from ltx_video.utils.prompt_enhance_utils import generate_cinematic_prompt  # For prompt enhancer
 
 # 1. Initialize minimal state and helper functions
 # A default T2V model
 model_name = "ckpts/wan2.1_text2video_1.3B_bf16.safetensors"
+
+# Prompt enhancer configuration
+ENABLE_PROMPT_ENHANCER = True  # Set to False to disable prompt enhancement
+LLM_ENHANCER_MODEL_DIR = "ckpts/Llama3_2"
+LLM_ENHANCER_MODEL_FILE = "ckpts/Llama3_2/Llama3_2_quanto_bf16_int8.safetensors"
 
 # Ensure the 'ckpts' directory exists for model download if it's the first run
 os.makedirs("ckpts", exist_ok=True)
@@ -205,7 +213,88 @@ if __name__ == "__main__":
             "if the model supports it."
         )
 
+    # Load prompt enhancer models if enabled
+    loaded_enhancer_llm_model = None
+    loaded_enhancer_llm_tokenizer = None
+
+    if ENABLE_PROMPT_ENHANCER:
+        print("Prompt enhancer enabled. Attempting to load LLM model and tokenizer...")
+        try:
+            # Load tokenizer
+            loaded_enhancer_llm_tokenizer = AutoTokenizer.from_pretrained(
+                LLM_ENHANCER_MODEL_DIR
+            )
+            print(f"Loaded LLM enhancer tokenizer from {LLM_ENHANCER_MODEL_DIR}")
+
+            # Load model - try wgp.offload first, fallback to standard loading
+            if hasattr(wgp, "offload") and hasattr(wgp.offload, "fast_load_transformers_model"):
+                print(f"Loading LLM model using wgp.offload from {LLM_ENHANCER_MODEL_FILE}")
+                loaded_enhancer_llm_model = wgp.offload.fast_load_transformers_model(
+                    LLM_ENHANCER_MODEL_FILE
+                )
+                
+                # Move to correct device
+                if hasattr(wgp, "args") and wgp.args.gpu and torch.cuda.is_available():
+                    loaded_enhancer_llm_model = loaded_enhancer_llm_model.to(wgp.args.gpu)
+                elif torch.cuda.is_available():
+                    loaded_enhancer_llm_model = loaded_enhancer_llm_model.to("cuda")
+                else:
+                    loaded_enhancer_llm_model = loaded_enhancer_llm_model.to("cpu")
+                print("Loaded LLM enhancer model using wgp.offload")
+            else:
+                print("WARN: wgp.offload.fast_load_transformers_model not available.")
+                print("Standard loading for quantized models would require additional setup.")
+                loaded_enhancer_llm_model = None
+
+            if not loaded_enhancer_llm_model:
+                print("LLM enhancer model could not be loaded. Skipping enhancement.")
+
+        except Exception as e:
+            print(f"Error loading LLM enhancer model/tokenizer: {e}. Skipping enhancement.")
+            loaded_enhancer_llm_model = None
+            loaded_enhancer_llm_tokenizer = None
+
     try:
+        # Apply prompt enhancement if enabled and models are loaded
+        if (ENABLE_PROMPT_ENHANCER and
+            loaded_enhancer_llm_model and
+            loaded_enhancer_llm_tokenizer):
+            
+            original_prompt_text = video_params["prompt"]
+            print(f"Original prompt: {original_prompt_text}")
+
+            # Seed before enhancement (similar to wgp.py)
+            current_seed = video_params.get("seed", -1)
+            if hasattr(wgp, "seed_everything"):
+                wgp.seed_everything(current_seed)
+            else:
+                # Fallback seeding
+                seed_val = current_seed if current_seed != -1 else random.randint(0, 2**32 - 1)
+                torch.manual_seed(seed_val)
+                print(f"Seeded with: {seed_val} (using fallback seeding)")
+
+            # Call prompt enhancer (T2V mode - no images)
+            enhanced_prompts_list = generate_cinematic_prompt(
+                image_caption_model=None,
+                image_caption_processor=None,
+                prompt_enhancer_model=loaded_enhancer_llm_model,
+                prompt_enhancer_tokenizer=loaded_enhancer_llm_tokenizer,
+                prompt=original_prompt_text,
+                images=None,  # T2V enhancement
+                max_new_tokens=256
+            )
+
+            if enhanced_prompts_list and isinstance(enhanced_prompts_list, list) and len(enhanced_prompts_list) > 0:
+                enhanced_prompt_text = enhanced_prompts_list[0]
+                video_params["prompt"] = enhanced_prompt_text
+                script_task_item["prompt"] = "!enhanced!\n" + enhanced_prompt_text
+                print(f"Enhanced prompt: {enhanced_prompt_text}")
+            else:
+                print("Prompt enhancement failed or returned empty result. Using original prompt.")
+        else:
+            if ENABLE_PROMPT_ENHANCER:
+                print("Prompt enhancement enabled but models not loaded. Using original prompt.")
+
         print("Starting video generation...")
         # The `task` argument to generate_video is used for some UI updates
         # (thumbnails) and potentially for some logic within generate_video
