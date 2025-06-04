@@ -5,7 +5,9 @@ import torch  # Used by wgp.py, good for type hints
 from transformers import AutoTokenizer  # For prompt enhancer
 
 import wgp
-from ltx_video.utils.prompt_enhance_utils import generate_cinematic_prompt  # For prompt enhancer
+from ltx_video.utils.prompt_enhance_utils import (
+    generate_cinematic_prompt,
+)  # For prompt enhancer
 
 # 1. Initialize minimal state and helper functions
 # A default T2V model
@@ -114,10 +116,10 @@ script_task_item = {
 }
 
 video_params = {
-    "prompt": "Steampunk thought machine: Wide-angle tilt of brass gears translating roses to syllogisms with overcranked clockwork mechanics and piston cameras.",
+    "prompt": "Celestial ballerina dances across constellation strings in cosmic ballet, star-map animation, dramatic backlit arabesques",
     "negative_prompt": "blurry, low quality, ugly, deformed",
     "resolution": "832x480",
-    "video_length": 144,
+    "video_length": 240,
     "seed": -1,
     "num_inference_steps": 20,
     "guidance_scale": 7.0,
@@ -142,7 +144,7 @@ video_params = {
     "keep_frames_video_guide": "",
     "video_mask": None,
     "audio_guide": None,
-    "sliding_window_size": 81,
+    "sliding_window_size": 130,
     "sliding_window_overlap": 5,
     "sliding_window_overlap_noise": 20,
     "sliding_window_discard_last_frames": 8,
@@ -218,7 +220,7 @@ if __name__ == "__main__":
         """Download Llama3_2 model for prompt enhancement if missing."""
         try:
             from huggingface_hub import hf_hub_download
-            
+
             # Check if model files exist
             required_files = [
                 "config.json",
@@ -226,28 +228,30 @@ if __name__ == "__main__":
                 "Llama3_2_quanto_bf16_int8.safetensors",
                 "special_tokens_map.json",
                 "tokenizer.json",
-                "tokenizer_config.json"
+                "tokenizer_config.json",
             ]
-            
+
             missing_files = []
             for filename in required_files:
                 file_path = os.path.join(LLM_ENHANCER_MODEL_DIR, filename)
                 if not os.path.isfile(file_path):
                     missing_files.append(filename)
-            
+
             if not missing_files:
                 print("✅ All Llama3_2 model files already present")
                 return True
-                
-            print(f"📥 Downloading {len(missing_files)} missing Llama3_2 model files...")
-            
+
+            print(
+                f"📥 Downloading {len(missing_files)} missing Llama3_2 model files..."
+            )
+
             # Create directory if needed
             os.makedirs(LLM_ENHANCER_MODEL_DIR, exist_ok=True)
-            
+
             # Download missing files
             repo_id = "DeepBeepMeep/LTX_Video"
             subfolder = "Llama3_2"
-            
+
             for filename in missing_files:
                 print(f"⬇️  Downloading {filename}...")
                 try:
@@ -255,18 +259,20 @@ if __name__ == "__main__":
                         repo_id=repo_id,
                         filename=filename,
                         local_dir="ckpts",
-                        subfolder=subfolder
+                        subfolder=subfolder,
                     )
                     print(f"✅ {filename} downloaded successfully")
                 except Exception as e:
                     print(f"❌ Failed to download {filename}: {e}")
                     return False
-            
+
             print("🎉 All Llama3_2 model files downloaded successfully!")
             return True
-            
+
         except ImportError:
-            print("❌ huggingface_hub not available. Please install: pip install huggingface_hub")
+            print(
+                "❌ huggingface_hub not available. Please install: pip install huggingface_hub"
+            )
             return False
         except Exception as e:
             print(f"❌ Error downloading models: {e}")
@@ -281,7 +287,7 @@ if __name__ == "__main__":
         if not download_prompt_enhancer_models():
             print("Failed to download prompt enhancer models. Disabling enhancement.")
             ENABLE_PROMPT_ENHANCER = False
-        
+
     if ENABLE_PROMPT_ENHANCER:
         print("Prompt enhancer enabled. Attempting to load LLM model and tokenizer...")
         try:
@@ -292,15 +298,21 @@ if __name__ == "__main__":
             print(f"Loaded LLM enhancer tokenizer from {LLM_ENHANCER_MODEL_DIR}")
 
             # Load model - try wgp.offload first, fallback to standard loading
-            if hasattr(wgp, "offload") and hasattr(wgp.offload, "fast_load_transformers_model"):
-                print(f"Loading LLM model using wgp.offload from {LLM_ENHANCER_MODEL_FILE}")
+            if hasattr(wgp, "offload") and hasattr(
+                wgp.offload, "fast_load_transformers_model"
+            ):
+                print(
+                    f"Loading LLM model using wgp.offload from {LLM_ENHANCER_MODEL_FILE}"
+                )
                 loaded_enhancer_llm_model = wgp.offload.fast_load_transformers_model(
                     LLM_ENHANCER_MODEL_FILE
                 )
-                
+
                 # Move to correct device
                 if hasattr(wgp, "args") and wgp.args.gpu and torch.cuda.is_available():
-                    loaded_enhancer_llm_model = loaded_enhancer_llm_model.to(wgp.args.gpu)
+                    loaded_enhancer_llm_model = loaded_enhancer_llm_model.to(
+                        wgp.args.gpu
+                    )
                 elif torch.cuda.is_available():
                     loaded_enhancer_llm_model = loaded_enhancer_llm_model.to("cuda")
                 else:
@@ -308,23 +320,28 @@ if __name__ == "__main__":
                 print("Loaded LLM enhancer model using wgp.offload")
             else:
                 print("WARN: wgp.offload.fast_load_transformers_model not available.")
-                print("Standard loading for quantized models would require additional setup.")
+                print(
+                    "Standard loading for quantized models would require additional setup."
+                )
                 loaded_enhancer_llm_model = None
 
             if not loaded_enhancer_llm_model:
                 print("LLM enhancer model could not be loaded. Skipping enhancement.")
 
         except Exception as e:
-            print(f"Error loading LLM enhancer model/tokenizer: {e}. Skipping enhancement.")
+            print(
+                f"Error loading LLM enhancer model/tokenizer: {e}. Skipping enhancement."
+            )
             loaded_enhancer_llm_model = None
             loaded_enhancer_llm_tokenizer = None
 
     try:
         # Apply prompt enhancement if enabled and models are loaded
-        if (ENABLE_PROMPT_ENHANCER and
-            loaded_enhancer_llm_model and
-            loaded_enhancer_llm_tokenizer):
-            
+        if (
+            ENABLE_PROMPT_ENHANCER
+            and loaded_enhancer_llm_model
+            and loaded_enhancer_llm_tokenizer
+        ):
             original_prompt_text = video_params["prompt"]
             print(f"Original prompt: {original_prompt_text}")
 
@@ -334,7 +351,9 @@ if __name__ == "__main__":
                 wgp.seed_everything(current_seed)
             else:
                 # Fallback seeding
-                seed_val = current_seed if current_seed != -1 else random.randint(0, 2**32 - 1)
+                seed_val = (
+                    current_seed if current_seed != -1 else random.randint(0, 2**32 - 1)
+                )
                 torch.manual_seed(seed_val)
                 print(f"Seeded with: {seed_val} (using fallback seeding)")
 
@@ -346,19 +365,26 @@ if __name__ == "__main__":
                 prompt_enhancer_tokenizer=loaded_enhancer_llm_tokenizer,
                 prompt=original_prompt_text,
                 images=None,  # T2V enhancement
-                max_new_tokens=256
+                max_new_tokens=256,
             )
 
-            if enhanced_prompts_list and isinstance(enhanced_prompts_list, list) and len(enhanced_prompts_list) > 0:
+            if (
+                enhanced_prompts_list
+                and isinstance(enhanced_prompts_list, list)
+                and len(enhanced_prompts_list) > 0
+            ):
                 enhanced_prompt_text = enhanced_prompts_list[0]
                 video_params["prompt"] = enhanced_prompt_text
                 script_task_item["prompt"] = "!enhanced!\n" + enhanced_prompt_text
                 print(f"Enhanced prompt: {enhanced_prompt_text}")
             else:
-                print("Prompt enhancement failed or returned empty result. Using original prompt.")
-        else:
-            if ENABLE_PROMPT_ENHANCER:
-                print("Prompt enhancement enabled but models not loaded. Using original prompt.")
+                print(
+                    "Prompt enhancement failed or returned empty result. Using original prompt."
+                )
+        elif ENABLE_PROMPT_ENHANCER:
+            print(
+                "Prompt enhancement enabled but models not loaded. Using original prompt."
+            )
 
         print("Starting video generation...")
         # The `task` argument to generate_video is used for some UI updates
