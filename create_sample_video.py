@@ -144,7 +144,7 @@ video_params = {
     "keep_frames_video_guide": "",
     "video_mask": None,
     "audio_guide": None,
-    "sliding_window_size": 130,
+    "sliding_window_size": 129,  # Must be 8k+1 for LTX Video (129%8=1)
     "sliding_window_overlap": 5,
     "sliding_window_overlap_noise": 20,
     "sliding_window_discard_last_frames": 8,

@@ -13,6 +13,8 @@ This file tracks the project's progress using a task list format.
 - ✅ Product context documentation created
 - ✅ Active context tracking established
 
+- ✅ ADDITIONAL FIX: Corrected sliding_window_size from 130 to 129 (129%8=1)
+- ✅ Identified that sliding window logic in wgp.py affects final frame count calculation
 ## Current Tasks
 
 - 🔄 Memory Bank setup completion (in progress)
