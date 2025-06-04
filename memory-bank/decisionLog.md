@@ -567,3 +567,33 @@ User requested planning and implementation of prompt enhancer in create_sample_v
 - **Compatibility**: Maintains all existing create_sample_video.py functionality
 
 ---
+[2025-01-06 22:47:00] - LTX Video Frame Count Assertion Error Fix
+
+## Decision
+
+Fixed "assert n_frames % 8 == 1" AssertionError in create_sample_video.py by correcting video_length parameter
+
+## Rationale
+
+The LTX Video pipeline has a strict requirement that the number of frames must follow the pattern n_frames % 8 == 1 (i.e., 1, 9, 17, 25, 33, 41, 49, 57, 65, 73, 81, 89, 97, 105, 113, 121, 129, 137, 145, 153, 161, 169, 177, 185, 193, 201, 209, 217, 225, 233, 241, etc.). The error occurred because video_length was set to 240, which gives 240 % 8 = 0, violating this constraint.
+
+## Implementation Details
+
+- **Root Cause**: video_length=240 in create_sample_video.py line 122 doesn't satisfy n_frames % 8 == 1
+- **Error Location**: ltx_video/pipelines/pipeline_ltx_video.py:1409 in prepare_conditioning() method
+- **Detection Method**: AssertionError traceback clearly showed the failing constraint
+- **Solution**: Changed video_length from 240 to 241 (241 % 8 = 1 ✅)
+- **Code Change**: Line 122: `"video_length": 240,` → `"video_length": 241,  # Must be 8k+1 for LTX Video`
+
+## Technical Analysis
+
+The LTX Video model architecture requires frame counts that follow this specific pattern for proper temporal processing. Valid frame counts near 240:
+- 233 % 8 = 1 ✅ (valid)
+- 241 % 8 = 1 ✅ (valid - chosen)
+- 249 % 8 = 1 ✅ (valid)
+
+## Expected Outcome
+
+The video generation should now proceed past the prepare_conditioning stage without the AssertionError, allowing the full pipeline to execute successfully.
+
+---

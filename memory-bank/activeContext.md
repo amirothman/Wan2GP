@@ -68,3 +68,22 @@ This file tracks the project's current status, including recent changes, current
 - Flake8 line length warnings need to be addressed (multiple lines exceed 79 characters)
 - Testing needed to verify prompt enhancement works with actual Llama3_2 model
 - Standard Hugging Face loading fallback for quantized models needs implementation if wgp.offload is not available
+[2025-01-06 22:47:00] - LTX Video Frame Count Assertion Error Fixed
+
+## Current Focus
+
+- Fixed critical AssertionError in LTX Video pipeline: "assert n_frames % 8 == 1"
+- Corrected video_length parameter in create_sample_video.py from 240 to 241
+- LTX Video pipeline now has valid frame count that satisfies 8k+1 constraint
+
+## Recent Changes
+
+- Updated create_sample_video.py line 122: video_length 240 → 241 with explanatory comment
+- Added comprehensive documentation to Memory Bank about LTX Video frame count requirements
+- Identified that LTX Video requires specific frame patterns (1, 9, 17, 25, 33, 41, 49, 57, 65, 73, 81, 89, 97, 105, 113, 121, 129, 137, 145, 153, 161, 169, 177, 185, 193, 201, 209, 217, 225, 233, 241, etc.)
+
+## Open Questions/Issues
+
+- Video generation testing needed to confirm fix resolves the AssertionError
+- Flake8 line length warnings remain in create_sample_video.py (21 violations)
+- Potential need for additional frame count validation in other scripts
