@@ -282,6 +282,8 @@ class LTXV:
             conditioning_start_frames.append(0)
             height, width = input_video.shape[-2:]
         else:
+            print(f"DEBUG: image_start={image_start}, type={type(image_start)}")
+            print(f"DEBUG: image_end={image_end}, type={type(image_end)}")
             if image_start != None:
                 image_start = image_start[0]
                 frame_width, frame_height  = image_start.size
