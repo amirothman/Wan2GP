@@ -1,3 +1,14 @@
+"""
+Example.
+
+curl -X POST   -d '{"prompt": "Stormcaller dancer in charged silk summons lightning with fan flourishes, mountain peak tempest, time-lapse cloud movement, sumi-e brushwo
+rk", "width":832, "height":480}'   -H "Authorization: bearer token-here"   -H 'Content-Type: application/json'   'https://api.deepinfra.com/v1/inference/black-forest-labs/FLUX-1-schn
+ell' | jq -r '.images[0]' | sed 's/^data:image\/png;base64,//' | base64 -d > schnell-output.png
+
+python create_sample_video.py --prompt "Stormcaller dancer in charged silk summons lightning with fan flourishes, mountain peak tempest, time-lapse cloud movement, sumi-
+e brushwork" --video_length 120
+"""
+
 import argparse  # For CLI argument parsing
 import os  # For path joining
 import random  # For fallback seeding
