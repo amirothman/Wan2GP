@@ -134,7 +134,7 @@ video_params = {
     "activated_loras": [],
     "loras_multipliers": "",
     "image_prompt_type": "I2V",
-    "image_start": Image.open("/root/schnell-output.png"),
+    "image_start": [Image.open("/root/schnell-output.png")],
     "image_end": None,
     "model_mode": 0,
     "video_source": None,
