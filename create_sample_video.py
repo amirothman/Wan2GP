@@ -116,7 +116,7 @@ script_task_item = {
 }
 
 video_params = {
-    "prompt": "Pole dancer performs acrobatics in zero-G club, metallic pasties catching light during spinning descents",
+    "prompt": "Liquid-mercury contortionist flows between morphing sound sculptures, abstract geometry space, dynamic dolly zoom, surrealist style.",
     "negative_prompt": "blurry, low quality, ugly, deformed",
     "resolution": "832x480",
     "video_length": 482,  # Must be 8k+1 for LTX Video (240%8=0, 241%8=1)
@@ -132,8 +132,8 @@ video_params = {
     "tea_cache_start_step_perc": 0,
     "activated_loras": [],
     "loras_multipliers": "",
-    "image_prompt_type": "T",
-    "image_start": None,
+    "image_prompt_type": "I2V",
+    "image_start": "/root/schnell-output.png",
     "image_end": None,
     "model_mode": 0,
     "video_source": None,
