@@ -139,7 +139,7 @@ def download_prompt_enhancer_models():
 
         missing_files = []
         for filename in required_files:
-            file_path = Path.join(LLM_ENHANCER_MODEL_DIR, filename)
+            file_path = os.path.join(LLM_ENHANCER_MODEL_DIR, filename)
             if not Path.isfile(file_path):
                 missing_files.append(filename)
 
