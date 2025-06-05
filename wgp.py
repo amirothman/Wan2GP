@@ -1445,7 +1445,58 @@ def get_lora_dir(model_filename):
 
 attention_modes_installed = get_attention_modes()
 attention_modes_supported = get_supported_attention_modes()
-args = _parse_args()
+
+# Initialize args with defaults when imported as module
+def _get_default_args():
+    """Get default arguments when wgp is imported as a module"""
+    class DefaultArgs:
+        def __init__(self):
+            self.quantize_transformer = False
+            self.share = False
+            self.lock_config = False
+            self.lock_model = False
+            self.preload = "0"
+            self.multiple_images = False
+            self.lora_dir_i2v = ""
+            self.lora_dir = ""
+            self.lora_dir_hunyuan = "loras_hunyuan"
+            self.lora_dir_hunyuan_i2v = "loras_hunyuan_i2v"
+            self.lora_dir_ltxv = "loras_ltxv"
+            self.check_loras = False
+            self.lora_preset = ""
+            self.settings = "settings"
+            self.profile = -1
+            self.verbose = 1
+            self.steps = 0
+            self.frames = 0
+            self.seed = -1
+            self.advanced = False
+            self.fp16 = False
+            self.bf16 = False
+            self.server_port = "0"
+            self.theme = ""
+            self.perc_reserved_mem_max = 0
+            self.server_name = ""
+            self.gpu = ""
+            self.open_browser = False
+            self.t2v = False
+            self.i2v = False
+            self.t2v_14B = False
+            self.t2v_1_3B = False
+            self.vace_1_3B = False
+            self.i2v_1_3B = False
+            self.i2v_14B = False
+            self.compile = False
+            self.listen = False
+            self.attention = ""
+            self.vae_config = ""
+            self.flow_reverse = True
+    
+    return DefaultArgs()
+
+# Use default args when imported, will be overridden in __main__
+args = _get_default_args()
+
 major, minor = torch.cuda.get_device_capability(args.gpu if len(args.gpu) > 0 else None)
 if major < 8:
     print("Switching to FP16 models when possible as GPU architecture doesn't support optimed BF16 Kernels")
@@ -5897,6 +5948,18 @@ def create_ui():
         return main
 
 if __name__ == "__main__":
+    # Parse arguments when running as script
+    args = _parse_args()
+    
+    # Initialize GPU-dependent variables
+    device = torch.device("cuda" if torch.cuda.is_available() and args.device != "cpu" else "cpu")
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
+        if hasattr(torch.backends.cudnn, 'allow_tf32'):
+            torch.backends.cudnn.allow_tf32 = True
+        if hasattr(torch, 'backends') and hasattr(torch.backends, 'cuda') and hasattr(torch.backends.cuda, 'matmul'):
+            torch.backends.cuda.matmul.allow_tf32 = True
+    
     atexit.register(autosave_queue)
     download_ffmpeg()
     # threading.Thread(target=runner, daemon=True).start()
