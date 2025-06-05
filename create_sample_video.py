@@ -1,7 +1,20 @@
+"""
+Example.
+
+curl -X POST   -d '{"prompt": "Stormcaller dancer in charged silk summons lightning with fan flourishes, mountain peak tempest, time-lapse cloud movement, sumi-e brushwo
+rk", "width":832, "height":480}'   -H "Authorization: bearer token-here"   -H 'Content-Type: application/json'   'https://api.deepinfra.com/v1/inference/black-forest-labs/FLUX-1-schn
+ell' | jq -r '.images[0]' | sed 's/^data:image\/png;base64,//' | base64 -d > schnell-output.png
+
+python create_sample_video.py --prompt "Stormcaller dancer in charged silk summons lightning with fan flourishes, mountain peak tempest, time-lapse cloud movement, sumi-
+e brushwork" --video_length 120
+"""
+
+import argparse  # For CLI argument parsing
 import os  # For path joining
 import random  # For fallback seeding
 
 import torch  # Used by wgp.py, good for type hints
+from PIL import Image
 from transformers import AutoTokenizer  # For prompt enhancer
 
 import wgp
@@ -11,7 +24,7 @@ from ltx_video.utils.prompt_enhance_utils import (
 
 # 1. Initialize minimal state and helper functions
 # A default T2V model
-model_name = "ckpts/ltxv_0.9.7_13B_dev_quanto_bf16_int8.safetensors"
+model_name = "ckpts/ltxv_0.9.7_13B_distilled_lora128_bf16.safetensors"
 
 # Prompt enhancer configuration
 ENABLE_PROMPT_ENHANCER = True  # Set to False to disable prompt enhancement
@@ -39,6 +52,22 @@ else:
     # If wgp.py is imported, its top-level code runs, including _parse_args()
     # which defines `args`.
     pass
+
+
+def parse_arguments():
+    """Parse command line arguments for prompt and video length."""
+    parser = argparse.ArgumentParser(description="Generate video using LTX Video model")
+    parser.add_argument(
+        "--prompt", type=str, required=True, help="Text prompt for video generation"
+    )
+    parser.add_argument(
+        "--video_length",
+        type=int,
+        default=17,
+        help="Video length in frames (default: 17).",
+    )
+    args = parser.parse_args()
+    return args
 
 
 # Minimal state required by generate_video and its callees
@@ -92,8 +121,6 @@ def script_send_cmd(command, data=None):
         print(f"Info: {data if data is not None else 'N/A'}")
     elif command == "error":
         print(f"Error: {data if data is not None else 'N/A'}")
-        # Option to halt on error
-        # raise Exception(f"Generation error: {data}")
     elif command == "exit":
         # This command doesn't use data
         print("Generation process finished signal.")
@@ -102,6 +129,70 @@ def script_send_cmd(command, data=None):
             f"send_cmd: Unknown command '{command}' with data: "
             f"{data if data is not None else 'N/A'}"
         )
+
+
+# Download prompt enhancer models if needed
+def download_prompt_enhancer_models():
+    """Download Llama3_2 model for prompt enhancement if missing."""
+    try:
+        from huggingface_hub import hf_hub_download
+
+        # Check if model files exist
+        required_files = [
+            "config.json",
+            "generation_config.json",
+            "Llama3_2_quanto_bf16_int8.safetensors",
+            "special_tokens_map.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        ]
+
+        missing_files = []
+        for filename in required_files:
+            file_path = os.path.join(LLM_ENHANCER_MODEL_DIR, filename)
+            if not os.path.isfile(file_path):
+                missing_files.append(filename)
+
+        if not missing_files:
+            print("✅ All Llama3_2 model files already present")
+            return True
+
+        print(
+            f"📥 Downloading {len(missing_files)} missing Llama3_2 model files..."
+        )
+
+        # Create directory if needed
+        os.makedirs(LLM_ENHANCER_MODEL_DIR, exist_ok=True)
+
+        # Download missing files
+        repo_id = "DeepBeepMeep/LTX_Video"
+        subfolder = "Llama3_2"
+
+        for filename in missing_files:
+            print(f"⬇️  Downloading {filename}...")
+            try:
+                hf_hub_download(
+                    repo_id=repo_id,
+                    filename=filename,
+                    local_dir="ckpts",
+                    subfolder=subfolder,
+                )
+                print(f"✅ {filename} downloaded successfully")
+            except Exception as e:
+                print(f"❌ Failed to download {filename}: {e}")
+                return False
+
+        print("🎉 All Llama3_2 model files downloaded successfully!")
+        return True
+
+    except ImportError:
+        print(
+            "❌ huggingface_hub not available. Please install: pip install huggingface_hub"
+        )
+        return False
+    except Exception as e:
+        print(f"❌ Error downloading models: {e}")
+        return False
 
 
 script_task_item = {
@@ -115,11 +206,12 @@ script_task_item = {
     "end_image_data_base64": None,  # For update_task_thumbnails
 }
 
+# Initialize video_params with default values (will be updated with CLI args)
 video_params = {
-    "prompt": "Pole dancer performs acrobatics in zero-G club, metallic pasties catching light during spinning descents",
+    "prompt": "",  # Will be set from CLI arguments
     "negative_prompt": "blurry, low quality, ugly, deformed",
     "resolution": "832x480",
-    "video_length": 482,  # Must be 8k+1 for LTX Video (240%8=0, 241%8=1)
+    "video_length": 17,  # Will be set from CLI arguments
     "seed": -1,
     "num_inference_steps": 20,
     "guidance_scale": 7.0,
@@ -132,8 +224,8 @@ video_params = {
     "tea_cache_start_step_perc": 0,
     "activated_loras": [],
     "loras_multipliers": "",
-    "image_prompt_type": "T",
-    "image_start": None,
+    "image_prompt_type": "I2V",
+    "image_start": [Image.open("schnell-output.png")],
     "image_end": None,
     "model_mode": 0,
     "video_source": None,
@@ -162,6 +254,7 @@ video_params = {
     "model_filename": model_name,
 }
 
+# Update script_task_item with video_params (will be set from CLI args)
 script_task_item["prompt"] = video_params["prompt"]
 script_task_item["length"] = video_params["video_length"]
 script_task_item["steps"] = video_params["num_inference_steps"]
@@ -169,11 +262,24 @@ script_task_item["steps"] = video_params["num_inference_steps"]
 # video_params to generate_video
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    args = parse_arguments()
+
     print(
         f"Wan2GP version: "
         f"{wgp.WanGP_version if hasattr(wgp, 'WanGP_version') else 'Unknown'}"
     )
     print(f"Using model: {model_name}")
+    print(f"Prompt: {args.prompt}")
+    print(f"Video length: {args.video_length} frames")
+
+    # Update video_params with CLI arguments
+    video_params["prompt"] = args.prompt
+    video_params["video_length"] = args.video_length
+
+    # Update script_task_item with CLI arguments
+    script_task_item["prompt"] = args.prompt
+    script_task_item["length"] = args.video_length
 
     # wgp.py initializes args, server_config, etc. at its top level.
     # These should be available after `import wgp`.
@@ -184,10 +290,14 @@ if __name__ == "__main__":
     # Ensure settings directory from wgp.args is created if not
     # already by wgp.py
     # This is a bit redundant if wgp.py already does it, but safe.
-    if hasattr(wgp, "args") and hasattr(wgp.args, "settings") and wgp.args.settings:
-        if not os.path.exists(wgp.args.settings):
-            os.makedirs(wgp.args.settings, exist_ok=True)
-            print(f"Ensured settings directory exists: {wgp.args.settings}")
+    if (
+        hasattr(wgp, "args")
+        and hasattr(wgp.args, "settings")
+        and wgp.args.settings
+        and not os.path.exists(wgp.args.settings)
+    ):
+        os.makedirs(wgp.args.settings, exist_ok=True)
+        print(f"Ensured settings directory exists: {wgp.args.settings}")
 
     # Ensure save_path directory exists
     if hasattr(wgp, "save_path") and wgp.save_path:
@@ -214,69 +324,6 @@ if __name__ == "__main__":
             "CUDA not available. This script will likely fail or run on CPU "
             "if the model supports it."
         )
-
-    # Download prompt enhancer models if needed
-    def download_prompt_enhancer_models():
-        """Download Llama3_2 model for prompt enhancement if missing."""
-        try:
-            from huggingface_hub import hf_hub_download
-
-            # Check if model files exist
-            required_files = [
-                "config.json",
-                "generation_config.json",
-                "Llama3_2_quanto_bf16_int8.safetensors",
-                "special_tokens_map.json",
-                "tokenizer.json",
-                "tokenizer_config.json",
-            ]
-
-            missing_files = []
-            for filename in required_files:
-                file_path = os.path.join(LLM_ENHANCER_MODEL_DIR, filename)
-                if not os.path.isfile(file_path):
-                    missing_files.append(filename)
-
-            if not missing_files:
-                print("✅ All Llama3_2 model files already present")
-                return True
-
-            print(
-                f"📥 Downloading {len(missing_files)} missing Llama3_2 model files..."
-            )
-
-            # Create directory if needed
-            os.makedirs(LLM_ENHANCER_MODEL_DIR, exist_ok=True)
-
-            # Download missing files
-            repo_id = "DeepBeepMeep/LTX_Video"
-            subfolder = "Llama3_2"
-
-            for filename in missing_files:
-                print(f"⬇️  Downloading {filename}...")
-                try:
-                    hf_hub_download(
-                        repo_id=repo_id,
-                        filename=filename,
-                        local_dir="ckpts",
-                        subfolder=subfolder,
-                    )
-                    print(f"✅ {filename} downloaded successfully")
-                except Exception as e:
-                    print(f"❌ Failed to download {filename}: {e}")
-                    return False
-
-            print("🎉 All Llama3_2 model files downloaded successfully!")
-            return True
-
-        except ImportError:
-            print(
-                "❌ huggingface_hub not available. Please install: pip install huggingface_hub"
-            )
-            return False
-        except Exception as e:
-            print(f"❌ Error downloading models: {e}")
-            return False
 
     # Load prompt enhancer models if enabled
     loaded_enhancer_llm_model = None
