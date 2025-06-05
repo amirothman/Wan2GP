@@ -1445,7 +1445,12 @@ def get_lora_dir(model_filename):
 
 attention_modes_installed = get_attention_modes()
 attention_modes_supported = get_supported_attention_modes()
-args = _parse_args()
+if __name__ == "__main__":
+    args = _parse_args()
+else:
+    from unittest.mock import MagicMock
+    args = MagicMock()
+
 
 major, minor = torch.cuda.get_device_capability(args.gpu if len(args.gpu) > 0 else None)
 if  major < 8:
@@ -1457,7 +1462,7 @@ else:
 args.flow_reverse = True
 processing_device = args.gpu
 if len(processing_device) == 0:
-    processing_device ="cuda"
+    processing_device = "cuda"
 # torch.backends.cuda.matmul.allow_fp16_accumulation = True
 lock_ui_attention = False
 lock_ui_transformer = False
