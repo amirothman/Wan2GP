@@ -284,14 +284,14 @@ if __name__ == "__main__":
         hasattr(wgp, "args")
         and hasattr(wgp.args, "settings")
         and wgp.args.settings
-        and not Path.exists(wgp.args.settings)
+        and not os.path.exists(wgp.args.settings)
     ):
         os.makedirs(wgp.args.settings, exist_ok=True)
         print(f"Ensured settings directory exists: {wgp.args.settings}")
 
     # Ensure save_path directory exists
     if hasattr(wgp, "save_path") and wgp.save_path:
-        if not Path.exists(wgp.save_path):
+        if not os.path.exists(wgp.save_path):
             os.makedirs(wgp.save_path, exist_ok=True)
         print(f"Output will be saved to: {wgp.save_path}")
     else:
