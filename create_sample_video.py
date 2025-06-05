@@ -8,6 +8,7 @@ import wgp
 from ltx_video.utils.prompt_enhance_utils import (
     generate_cinematic_prompt,
 )  # For prompt enhancer
+from PIL import Image
 
 # 1. Initialize minimal state and helper functions
 # A default T2V model
@@ -133,7 +134,7 @@ video_params = {
     "activated_loras": [],
     "loras_multipliers": "",
     "image_prompt_type": "I2V",
-    "image_start": "/root/schnell-output.png",
+    "image_start": Image.open("/root/schnell-output.png"),
     "image_end": None,
     "model_mode": 0,
     "video_source": None,
