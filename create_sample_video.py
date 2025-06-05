@@ -1,7 +1,6 @@
 import argparse  # For CLI argument parsing
 import os  # For path joining
 import random  # For fallback seeding
-from pathlib import Path
 
 import torch  # Used by wgp.py, good for type hints
 from PIL import Image
@@ -140,7 +139,7 @@ def download_prompt_enhancer_models():
         missing_files = []
         for filename in required_files:
             file_path = os.path.join(LLM_ENHANCER_MODEL_DIR, filename)
-            if not Path.isfile(file_path):
+            if not os.path.isfile(file_path):
                 missing_files.append(filename)
 
         if not missing_files:
