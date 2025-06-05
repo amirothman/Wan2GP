@@ -1445,15 +1445,9 @@ def get_lora_dir(model_filename):
 
 attention_modes_installed = get_attention_modes()
 attention_modes_supported = get_supported_attention_modes()
-if __name__ == "__main__":
-    args = _parse_args()
-else:
-    from unittest.mock import MagicMock
-    args = MagicMock()
-
-
+args = _parse_args()
 major, minor = torch.cuda.get_device_capability(args.gpu if len(args.gpu) > 0 else None)
-if  major < 8:
+if major < 8:
     print("Switching to FP16 models when possible as GPU architecture doesn't support optimed BF16 Kernels")
     bfloat16_supported = False
 else:
