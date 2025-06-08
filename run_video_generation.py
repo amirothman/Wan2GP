@@ -276,7 +276,7 @@ if __name__ == "__main__":
     # Update video_params with CLI arguments
     video_params["prompt"] = args.prompt
     video_params["video_length"] = args.video_length
-    video_params["image_start"] = [args.image_prompt]
+    video_params["image_start"] = [Image.open(args.image_prompt)]
 
     # Update script_task_item with CLI arguments
     script_task_item["prompt"] = args.prompt
