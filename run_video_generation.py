@@ -60,6 +60,9 @@ def parse_arguments():
         "--prompt", type=str, required=True, help="Text prompt for video generation"
     )
     parser.add_argument(
+        "--image_prompt", type=str, required=True, help="Path to image prompt for video generation"
+    )
+    parser.add_argument(
         "--video_length",
         type=int,
         default=17,
@@ -222,7 +225,7 @@ video_params = {
     "activated_loras": [],
     "loras_multipliers": "",
     "image_prompt_type": "I2V",
-    "image_start": [Image.open("schnell-output.png")],
+    "image_start": [],
     "image_end": None,
     "model_mode": 0,
     "video_source": None,
@@ -273,6 +276,7 @@ if __name__ == "__main__":
     # Update video_params with CLI arguments
     video_params["prompt"] = args.prompt
     video_params["video_length"] = args.video_length
+    video_params["image_start"] = [args.image_prompt]
 
     # Update script_task_item with CLI arguments
     script_task_item["prompt"] = args.prompt
