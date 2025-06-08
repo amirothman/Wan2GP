@@ -1,5 +1,4 @@
-"""
-Example.
+r"""Example.
 
 curl -X POST   -d '{"prompt": "Stormcaller dancer in charged silk summons lightning with fan flourishes, mountain peak tempest, time-lapse cloud movement, sumi-e brushwo
 rk", "width":832, "height":480}'   -H "Authorization: bearer token-here"   -H 'Content-Type: application/json'   'https://api.deepinfra.com/v1/inference/black-forest-labs/FLUX-1-schn
@@ -157,9 +156,7 @@ def download_prompt_enhancer_models():
             print("✅ All Llama3_2 model files already present")
             return True
 
-        print(
-            f"📥 Downloading {len(missing_files)} missing Llama3_2 model files..."
-        )
+        print(f"📥 Downloading {len(missing_files)} missing Llama3_2 model files...")
 
         # Create directory if needed
         os.makedirs(LLM_ENHANCER_MODEL_DIR, exist_ok=True)
