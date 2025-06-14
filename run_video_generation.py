@@ -207,7 +207,7 @@ script_task_item = {
 video_params = {
     "prompt": "",  # Will be set from CLI arguments
     "negative_prompt": "blurry, low quality, ugly, deformed",
-    "resolution": "832x480",
+    "resolution": "960x544",
     "video_length": 17,  # Will be set from CLI arguments
     "seed": -1,
     "num_inference_steps": 20,
