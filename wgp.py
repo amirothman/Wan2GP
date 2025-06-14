@@ -1736,7 +1736,6 @@ def get_transformer_dtype(model_family, transformer_dtype_policy):
         if model_family == "wan"and False:
             return torch.float16
         return torch.bfloat16
-        return transformer_dtype
     if transformer_dtype_policy =="fp16":
         return torch.float16
     return torch.bfloat16
@@ -5953,7 +5952,7 @@ if __name__ == "__main__":
     args = _parse_args()
     
     # Initialize GPU-dependent variables
-    device = torch.device("cuda" if torch.cuda.is_available() and args.device != "cpu" else "cpu")
+    device = torch.device(args.gpu if len(args.gpu) > 0 and torch.cuda.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
         if hasattr(torch.backends.cudnn, 'allow_tf32'):
