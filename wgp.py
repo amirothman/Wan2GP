@@ -1465,6 +1465,7 @@ def _get_default_args():
             self.check_loras = False
             self.lora_preset = ""
             self.settings = "settings"
+            self.device = "cpu"
             self.profile = -1
             self.verbose = 1
             self.steps = 0
