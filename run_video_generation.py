@@ -57,7 +57,10 @@ def parse_arguments():
         "--prompt", type=str, required=True, help="Text prompt for video generation"
     )
     parser.add_argument(
-        "--image_prompt", type=str, required=True, help="Path to image prompt for video generation"
+        "--image_prompt",
+        type=str,
+        required=True,
+        help="Path to image prompt for video generation",
     )
     parser.add_argument(
         "--video_length",
@@ -175,7 +178,9 @@ def download_prompt_enhancer_models():
         return True
 
     except ImportError:
-        raise ImportError("huggingface_hub not available. Please install: pip install huggingface_hub")
+        raise ImportError(
+            "huggingface_hub not available. Please install: pip install huggingface_hub"
+        )
     except Exception as e:
         raise RuntimeError(f"Error downloading models: {e}")
 
@@ -298,8 +303,6 @@ if __name__ == "__main__":
         # Default to cuda if available and not specified
         torch.set_default_device("cuda")
         # This print statement can be removed
-    else:
-        # This print statement can be removed
 
     # Load prompt enhancer models if enabled
     loaded_enhancer_llm_model = None
@@ -334,7 +337,9 @@ if __name__ == "__main__":
                 else:
                     loaded_enhancer_llm_model = loaded_enhancer_llm_model.to("cpu")
             else:
-                raise RuntimeError("wgp.offload.fast_load_transformers_model not available. Standard loading for quantized models would require additional setup.")
+                raise RuntimeError(
+                    "wgp.offload.fast_load_transformers_model not available. Standard loading for quantized models would require additional setup."
+                )
 
             if not loaded_enhancer_llm_model:
                 raise RuntimeError("LLM enhancer model could not be loaded.")
@@ -382,7 +387,9 @@ if __name__ == "__main__":
                 video_params["prompt"] = enhanced_prompt_text
                 script_task_item["prompt"] = "!enhanced!\n" + enhanced_prompt_text
             else:
-                raise RuntimeError("Prompt enhancement failed or returned empty result.")
+                raise RuntimeError(
+                    "Prompt enhancement failed or returned empty result."
+                )
 
         # Starting video generation...
         wgp.generate_video(
