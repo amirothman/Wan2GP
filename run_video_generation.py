@@ -152,44 +152,32 @@ def download_prompt_enhancer_models():
             if not os.path.isfile(file_path):
                 missing_files.append(filename)
 
-        if not missing_files:
-            print("✅ All Llama3_2 model files already present")
-            return True
+        if missing_files:
+            # Create directory if needed
+            os.makedirs(LLM_ENHANCER_MODEL_DIR, exist_ok=True)
 
-        print(f"📥 Downloading {len(missing_files)} missing Llama3_2 model files...")
+            # Download missing files
+            repo_id = "DeepBeepMeep/LTX_Video"
+            subfolder = "Llama3_2"
 
-        # Create directory if needed
-        os.makedirs(LLM_ENHANCER_MODEL_DIR, exist_ok=True)
+            for filename in missing_files:
+                try:
+                    hf_hub_download(
+                        repo_id=repo_id,
+                        filename=filename,
+                        local_dir="ckpts",
+                        subfolder=subfolder,
+                    )
+                except Exception as e:
+                    raise RuntimeError(f"Failed to download {filename}: {e}")
 
-        # Download missing files
-        repo_id = "DeepBeepMeep/LTX_Video"
-        subfolder = "Llama3_2"
-
-        for filename in missing_files:
-            print(f"⬇️  Downloading {filename}...")
-            try:
-                hf_hub_download(
-                    repo_id=repo_id,
-                    filename=filename,
-                    local_dir="ckpts",
-                    subfolder=subfolder,
-                )
-                print(f"✅ {filename} downloaded successfully")
-            except Exception as e:
-                print(f"❌ Failed to download {filename}: {e}")
-                return False
-
-        print("🎉 All Llama3_2 model files downloaded successfully!")
+        # If we get here, all files were either present or downloaded successfully
         return True
 
     except ImportError:
-        print(
-            "❌ huggingface_hub not available. Please install: pip install huggingface_hub"
-        )
-        return False
+        raise ImportError("huggingface_hub not available. Please install: pip install huggingface_hub")
     except Exception as e:
-        print(f"❌ Error downloading models: {e}")
-        return False
+        raise RuntimeError(f"Error downloading models: {e}")
 
 
 script_task_item = {
@@ -239,7 +227,7 @@ video_params = {
     "sliding_window_discard_last_frames": 8,
     "remove_background_images_ref": 0,
     "temporal_upsampling": "",
-    "spatial_upsampling": "",
+    "spatial_upsampling": "lanczos2",
     "RIFLEx_setting": 0,
     "slg_switch": 0,
     "slg_layers": [9],
@@ -262,13 +250,7 @@ if __name__ == "__main__":
     # Parse command line arguments
     args = parse_arguments()
 
-    print(
-        f"Wan2GP version: "
-        f"{wgp.WanGP_version if hasattr(wgp, 'WanGP_version') else 'Unknown'}"
-    )
-    print(f"Using model: {model_name}")
-    print(f"Prompt: {args.prompt}")
-    print(f"Video length: {args.video_length} frames")
+    # These print statements can be removed as they're not needed when exceptions are raised
 
     # Update video_params with CLI arguments
     video_params["prompt"] = args.prompt
@@ -295,33 +277,29 @@ if __name__ == "__main__":
         and not os.path.exists(wgp.args.settings)
     ):
         os.makedirs(wgp.args.settings, exist_ok=True)
-        print(f"Ensured settings directory exists: {wgp.args.settings}")
 
     # Ensure save_path directory exists
     if hasattr(wgp, "save_path") and wgp.save_path:
         if not os.path.exists(wgp.save_path):
             os.makedirs(wgp.save_path, exist_ok=True)
-        print(f"Output will be saved to: {wgp.save_path}")
+        # This print statement can be removed
     else:
         # Fallback if wgp.save_path isn't set for some reason
         fallback_save_path = "outputs_script"
         os.makedirs(fallback_save_path, exist_ok=True)
         # Make it available to generate_video
         wgp.save_path = fallback_save_path
-        print(f"wgp.save_path not found, using fallback: {fallback_save_path}")
+        # This print statement can be removed
 
     if hasattr(wgp, "args") and wgp.args.gpu and torch.cuda.is_available():
         torch.set_default_device(wgp.args.gpu)
-        print(f"Set default torch device to: {wgp.args.gpu}")
+        # This print statement can be removed
     elif torch.cuda.is_available():
         # Default to cuda if available and not specified
         torch.set_default_device("cuda")
-        print("Set default torch device to: cuda")
+        # This print statement can be removed
     else:
-        print(
-            "CUDA not available. This script will likely fail or run on CPU "
-            "if the model supports it."
-        )
+        # This print statement can be removed
 
     # Load prompt enhancer models if enabled
     loaded_enhancer_llm_model = None
@@ -329,26 +307,19 @@ if __name__ == "__main__":
 
     if ENABLE_PROMPT_ENHANCER:
         # Download models if missing
-        if not download_prompt_enhancer_models():
-            print("Failed to download prompt enhancer models. Disabling enhancement.")
-            ENABLE_PROMPT_ENHANCER = False
+        download_prompt_enhancer_models()
 
     if ENABLE_PROMPT_ENHANCER:
-        print("Prompt enhancer enabled. Attempting to load LLM model and tokenizer...")
         try:
             # Load tokenizer
             loaded_enhancer_llm_tokenizer = AutoTokenizer.from_pretrained(
                 LLM_ENHANCER_MODEL_DIR
             )
-            print(f"Loaded LLM enhancer tokenizer from {LLM_ENHANCER_MODEL_DIR}")
 
             # Load model - try wgp.offload first, fallback to standard loading
             if hasattr(wgp, "offload") and hasattr(
                 wgp.offload, "fast_load_transformers_model"
             ):
-                print(
-                    f"Loading LLM model using wgp.offload from {LLM_ENHANCER_MODEL_FILE}"
-                )
                 loaded_enhancer_llm_model = wgp.offload.fast_load_transformers_model(
                     LLM_ENHANCER_MODEL_FILE
                 )
@@ -362,23 +333,14 @@ if __name__ == "__main__":
                     loaded_enhancer_llm_model = loaded_enhancer_llm_model.to("cuda")
                 else:
                     loaded_enhancer_llm_model = loaded_enhancer_llm_model.to("cpu")
-                print("Loaded LLM enhancer model using wgp.offload")
             else:
-                print("WARN: wgp.offload.fast_load_transformers_model not available.")
-                print(
-                    "Standard loading for quantized models would require additional setup."
-                )
-                loaded_enhancer_llm_model = None
+                raise RuntimeError("wgp.offload.fast_load_transformers_model not available. Standard loading for quantized models would require additional setup.")
 
             if not loaded_enhancer_llm_model:
-                print("LLM enhancer model could not be loaded. Skipping enhancement.")
+                raise RuntimeError("LLM enhancer model could not be loaded.")
 
         except Exception as e:
-            print(
-                f"Error loading LLM enhancer model/tokenizer: {e}. Skipping enhancement."
-            )
-            loaded_enhancer_llm_model = None
-            loaded_enhancer_llm_tokenizer = None
+            raise RuntimeError(f"Error loading LLM enhancer model/tokenizer: {e}")
 
     try:
         # Apply prompt enhancement if enabled and models are loaded
@@ -388,7 +350,6 @@ if __name__ == "__main__":
             and loaded_enhancer_llm_tokenizer
         ):
             original_prompt_text = video_params["prompt"]
-            print(f"Original prompt: {original_prompt_text}")
 
             # Seed before enhancement (similar to wgp.py)
             current_seed = video_params.get("seed", -1)
@@ -400,7 +361,6 @@ if __name__ == "__main__":
                     current_seed if current_seed != -1 else random.randint(0, 2**32 - 1)
                 )
                 torch.manual_seed(seed_val)
-                print(f"Seeded with: {seed_val} (using fallback seeding)")
 
             # Call prompt enhancer (T2V mode - no images)
             enhanced_prompts_list = generate_cinematic_prompt(
@@ -421,32 +381,16 @@ if __name__ == "__main__":
                 enhanced_prompt_text = enhanced_prompts_list[0]
                 video_params["prompt"] = enhanced_prompt_text
                 script_task_item["prompt"] = "!enhanced!\n" + enhanced_prompt_text
-                print(f"Enhanced prompt: {enhanced_prompt_text}")
             else:
-                print(
-                    "Prompt enhancement failed or returned empty result. Using original prompt."
-                )
-        elif ENABLE_PROMPT_ENHANCER:
-            print(
-                "Prompt enhancement enabled but models not loaded. Using original prompt."
-            )
+                raise RuntimeError("Prompt enhancement failed or returned empty result.")
 
-        print("Starting video generation...")
-        # The `task` argument to generate_video is used for some UI updates
-        # (thumbnails) and potentially for some logic within generate_video
-        # if it expects certain fields.
-        # The actual generation parameters are passed via **video_params.
+        # Starting video generation...
         wgp.generate_video(
             task=script_task_item,
             send_cmd=script_send_cmd,
             state=script_state,
             **video_params,
         )
-        print("Video generation script finished.")
-        print(f"Check the '{wgp.save_path}' directory for the output video.")
 
     except Exception as e:
-        print(f"An error occurred during video generation: {e}")
-        import traceback
-
-        traceback.print_exc()
+        raise RuntimeError(f"An error occurred during video generation: {e}")
