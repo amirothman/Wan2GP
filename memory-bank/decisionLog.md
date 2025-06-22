@@ -600,3 +600,55 @@ The LTX Video model architecture requires frame counts that follow this specific
 The video generation should now proceed past the prepare_conditioning stage without the AssertionError, allowing the full pipeline to execute successfully.
 
 ---
+[2025-06-22 12:54:00] - BFloat16 NumPy Conversion Fix in resize_lanczos
+
+## Decision
+
+Fixed "Got unsupported ScalarType BFloat16" TypeError in wan/utils/utils.py resize_lanczos function
+
+## Rationale
+
+The error occurred during video generation when the resize_lanczos function attempted to convert BFloat16 tensors to NumPy arrays. NumPy doesn't natively support PyTorch's BFloat16 dtype, causing the conversion to fail at the .numpy() call. This is consistent with previous BFloat16 issues resolved in the LTX Video pipeline.
+
+## Implementation Details
+
+- **Root Cause**: PyTorch BFloat16 tensors incompatible with NumPy conversion in resize_lanczos function
+- **Error Location**: wan/utils/utils.py:64 during img.movedim(0, -1).cpu().numpy() operation
+- **Detection Method**: Error traceback showed TypeError: Got unsupported ScalarType BFloat16
+- **Solution**: 
+  1. Added dtype check for torch.bfloat16 before NumPy conversion
+  2. Convert BFloat16 tensors to float32 using .to(torch.float32)
+  3. Separated tensor operations for better error handling
+  4. Maintained original functionality while ensuring NumPy compatibility
+
+## Code Changes
+
+**File**: wan/utils/utils.py lines 63-66
+
+**Before**:
+```python
+def resize_lanczos(img, h, w):
+    img = Image.fromarray(np.clip(255. * img.movedim(0, -1).cpu().numpy(), 0, 255).astype(np.uint8))
+    img = img.resize((w,h), resample=Image.Resampling.LANCZOS)
+    return torch.from_numpy(np.array(img).astype(np.float32) / 255.0).movedim(-1, 0)
+```
+
+**After**:
+```python
+def resize_lanczos(img, h, w):
+    # Convert BFloat16 to float32 before NumPy conversion to avoid ScalarType error
+    if img.dtype == torch.bfloat16:
+        img = img.to(torch.float32)
+    
+    img_processed = img.movedim(0, -1).cpu()
+    img_array = np.clip(255. * img_processed.numpy(), 0, 255).astype(np.uint8)
+    img_pil = Image.fromarray(img_array)
+    img_pil = img_pil.resize((w, h), resample=Image.Resampling.LANCZOS)
+    return torch.from_numpy(np.array(img_pil).astype(np.float32) / 255.0).movedim(-1, 0)
+```
+
+## Expected Outcome
+
+This fix ensures automatic dtype compatibility for BFloat16 tensors in the resize_lanczos function, resolving the RuntimeError permanently and allowing video generation to proceed without NumPy conversion errors.
+
+---

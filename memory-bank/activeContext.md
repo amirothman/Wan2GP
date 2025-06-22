@@ -87,3 +87,25 @@ This file tracks the project's current status, including recent changes, current
 - Video generation testing needed to confirm fix resolves the AssertionError
 - Flake8 line length warnings remain in create_sample_video.py (21 violations)
 - Potential need for additional frame count validation in other scripts
+[2025-06-22 12:54:00] - BFloat16 Conversion Error Fix in Video Generation Pipeline
+
+## Current Focus
+
+- Fixed critical BFloat16 to NumPy conversion error in wan/utils/utils.py resize_lanczos function
+- Resolved "Got unsupported ScalarType BFloat16" TypeError that was blocking video generation
+- Applied consistent BFloat16 handling pattern established in previous LTX Video pipeline fixes
+
+## Recent Changes
+
+- Modified resize_lanczos function to detect and convert BFloat16 tensors to float32 before NumPy operations
+- Added explicit dtype checking and conversion logic for robust tensor handling
+- Refactored function structure for better error handling and maintainability
+- Updated Memory Bank documentation with detailed technical analysis
+
+## Open Questions/Issues
+
+- Video generation testing needed to confirm fix resolves the BFloat16 conversion error
+- Potential need for similar BFloat16 handling in other utility functions throughout the codebase
+- Performance impact assessment of dtype conversion in image processing pipeline
+
+---

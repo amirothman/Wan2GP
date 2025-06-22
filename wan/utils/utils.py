@@ -61,9 +61,15 @@ def get_video_frame(file_name, frame_no):
     return img
 
 def resize_lanczos(img, h, w):
-    img = Image.fromarray(np.clip(255. * img.movedim(0, -1).cpu().numpy(), 0, 255).astype(np.uint8))
-    img = img.resize((w,h), resample=Image.Resampling.LANCZOS)
-    return torch.from_numpy(np.array(img).astype(np.float32) / 255.0).movedim(-1, 0)
+    # Convert BFloat16 to float32 before NumPy conversion to avoid ScalarType error
+    if img.dtype == torch.bfloat16:
+        img = img.to(torch.float32)
+    
+    img_processed = img.movedim(0, -1).cpu()
+    img_array = np.clip(255. * img_processed.numpy(), 0, 255).astype(np.uint8)
+    img_pil = Image.fromarray(img_array)
+    img_pil = img_pil.resize((w, h), resample=Image.Resampling.LANCZOS)
+    return torch.from_numpy(np.array(img_pil).astype(np.float32) / 255.0).movedim(-1, 0)
 
 
 def remove_background(img, session=None):

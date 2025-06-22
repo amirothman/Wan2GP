@@ -372,3 +372,26 @@ The prompt enhancer integration is now fully implemented in create_sample_video.
 - 🧪 Test create_sample_video.py with corrected frame count (241)
 - 🔍 Monitor for successful video generation without assertion errors
 - 📚 Update documentation if needed based on test results
+[2025-06-22 12:54:00] - BFloat16 NumPy Conversion Error Fix in resize_lanczos
+
+## Completed Tasks
+
+- ✅ Diagnosed "Got unsupported ScalarType BFloat16" TypeError in wan/utils/utils.py
+- ✅ Identified root cause: BFloat16 tensors incompatible with NumPy conversion in resize_lanczos function
+- ✅ Located error source: wan/utils/utils.py:64 during tensor to NumPy array conversion
+- ✅ Implemented dtype check and conversion from BFloat16 to float32 before NumPy operations
+- ✅ Refactored function for better error handling and maintainability
+- ✅ Updated Memory Bank with detailed fix documentation
+
+## Current Tasks
+
+- 🔄 Ready for testing of the BFloat16 conversion fix
+- 📋 Awaiting validation that the TypeError is resolved and video generation proceeds
+
+## Next Steps
+
+- 🧪 Test video generation with corrected resize_lanczos function
+- 🔍 Monitor for successful image processing without BFloat16 conversion errors
+- 📚 Update documentation if needed based on test results
+
+---
